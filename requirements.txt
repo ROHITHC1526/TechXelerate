@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+SQLAlchemy>=1.4
+asyncpg
+psycopg2-binary
+python-dotenv
+passlib[bcrypt]
+pyjwt
+qrcode[pil]
+reportlab
+Pillow
+python-multipart
+pydantic[email]
+pydantic-settings
+aiosmtplib
+gunicorn
