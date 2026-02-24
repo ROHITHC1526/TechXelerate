@@ -63,15 +63,13 @@ curl -X POST "http://localhost:8000/api/verify-otp" \
 ```bash
 curl -X POST "http://localhost:8000/api/attendance/scan" \
   -H "Content-Type: application/json" \
-  -d '{
-    "qr_data": "{\"team_code\":\"TEAM-XXXXX\",\"participant_id\":\"TEAM-XXXXX-000\",\"participant_name\":\"John Doe\",\"is_team_leader\":true,\"timestamp\":\"2026-02-22T10:00:00\"}"
-  }'
+  -d '{"team_id":"HACKCSM-001","access_key":"TEST_ACCESS_KEY_123","timestamp":"2026-02-22T10:00:00"}'
 ```
-**Expected**: Attendance updated, `"message": "Welcome John Doe!"`
+**Expected**: Attendance updated, `"message": "Welcome!"`
 
 ### Test 4: Get Team Info
 ```bash
-curl "http://localhost:8000/api/team/by-code/TEAM-XXXXX"
+curl "http://localhost:8000/api/teams/HACKCSM-001"
 ```
 **Expected**: Team details with `"attendance_status": true`
 
@@ -133,25 +131,26 @@ ls -lh assets/HACK-*.pdf
 **Debug PDF Generation**:
 ```python
 from app.pdf_generator import IDCardGenerator
-from app.utils import generate_participant_id, generate_unique_team_code
+from app.utils import generate_team_id, generate_access_key
 
-team_code = generate_unique_team_code()
+team_id = generate_team_id(1)
+access_key = generate_access_key(12)
 members = [
-    {
-        'name': 'John Doe',
-        'email': 'john@example.com',
-        'phone': '+919876543210',
-        'photo_path': None,
-        'is_team_leader': True,
-        'participant_id': generate_participant_id(team_code, 0)
-    }
+  {
+    'name': 'John Doe',
+    'email': 'john@example.com',
+    'phone': '+919876543210',
+    'photo_path': None,
+    'is_team_leader': True,
+    'participant_id': f"{team_id}-000"
+  }
 ]
 
 gen = IDCardGenerator()
 pdf_path = gen.generate_participant_id_cards(
-    team_data={'team_id': 'HACK-001', 'team_code': team_code, 'team_name': 'Test'},
-    team_members_list=members,
-    output_filename='test_id_cards.pdf'
+  team_data={'team_id': team_id, 'team_name': 'Test', 'access_key': access_key},
+  team_members_list=members,
+  output_filename='test_id_cards.pdf'
 )
 print(f"Generated: {pdf_path}")
 ```

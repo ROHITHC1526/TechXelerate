@@ -47,10 +47,10 @@ class IDCardService:
         Generate QR code from attendance data.
         
         Args:
-            data: Dictionary with team_code, participant_id, participant_name, etc.
+            data: Dictionary with team_id, access_key, timestamp (QR payload)
             size: QR code size in pixels
             
-        Returns:
+            Returns:
             PIL Image object of QR code
         """
         try:
@@ -83,7 +83,7 @@ class IDCardService:
         Create a single ID card as a PIL Image.
         
         Args:
-            team_data: Team information (team_id, team_code, team_name, domain, etc.)
+            team_data: Team information (team_id, team_name, domain, access_key, etc.)
             member_data: Member information (name, email, photo_path, participant_id, etc.)
             member_index: Index of member in team
             
@@ -171,11 +171,11 @@ class IDCardService:
             
             # --- MEMBER INFO SECTION ---
             y_pos += 80
-            
-            # Team code
-            draw.text((525, y_pos), f"Code: {team_data.get('team_code', 'N/A')}", 
+
+            # Team ID
+            draw.text((525, y_pos), f"Team ID: {team_data.get('team_id', 'N/A')}", 
                      fill=(255, 255, 0), font=small_font, anchor="mm")  # Yellow
-            
+
             y_pos += 50
             
             # Member name
@@ -214,14 +214,10 @@ class IDCardService:
             # --- QR CODE SECTION ---
             y_pos += 80
             
-            # Generate QR code
+            # Generate QR code (contains only team_id + access_key)
             qr_data = {
-                "team_code": team_data.get('team_code'),
-                "participant_id": participant_id,
-                "participant_name": member_name,
-                "is_team_leader": member_index == 0,
                 "team_id": team_data.get('team_id'),
-                "checkin_url": f"{settings.BASE_URL}/api/attendance/scan"
+                "access_key": team_data.get('access_key')
             }
             qr_img = self.generate_qr_code(qr_data, size=180)
             

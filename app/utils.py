@@ -16,13 +16,17 @@ def generate_otp() -> str:
     return f"{random.randint(0, 999999):06d}"
 
 
-def generate_access_key(n: int = 10) -> str:
-    chars = string.ascii_letters + string.digits
+def generate_access_key(n: int = 64) -> str:
+    """Generate a secure random access key (default 64 chars)."""
+    chars = string.ascii_letters + string.digits + string.punctuation
     return ''.join(random.choice(chars) for _ in range(n))
 
 
 def generate_team_id(seq: int) -> str:
-    return f"HACK2026-{seq:03d}"
+    """
+    Format team id as HACKCSM-XXX where XXX is a zero-padded 3-digit sequence.
+    """
+    return f"HACKCSM-{seq:03d}"
 
 
 def generate_checkin_code(n: int = 8) -> str:
@@ -31,52 +35,41 @@ def generate_checkin_code(n: int = 8) -> str:
     return ''.join(random.choice(chars) for _ in range(n))
 
 
-def generate_unique_team_code() -> str:
+
+
+async def generate_next_team_id(async_session) -> str:
     """
-    Generate a unique team code for QR scanning and attendance tracking.
-    Format: TEAM-{6 uppercase alphanumeric chars}
-    Example: TEAM-K9X2V5
+    Generate the next sequential team id using the teams table count.
+    This must be called after OTP verification and before creating the Team record.
+    Returns a string like HACKCSM-001
     """
-    chars = string.ascii_uppercase + string.digits
-    code = ''.join(random.choice(chars) for _ in range(6))
-    return f"TEAM-{code}"
+    # Import here to avoid circular imports
+    from sqlalchemy import select, func
+    from .models import Team
+
+    q = await async_session.execute(select(func.count()).select_from(Team))
+    (count,) = q.one()
+    next_seq = int(count) + 1
+    return generate_team_id(next_seq)
 
 
-def generate_participant_id(team_code: str, member_index: int) -> str:
-    """
-    Generate unique participant ID for each team member.
-    Format: TEAM-K9X2V5-000 (team code + member index)
-    """
-    return f"{team_code}-{member_index:03d}"
+def save_qr(payload: dict, out_dir: str = "assets", filename_prefix: str = None) -> str:
+    """Generate a QR containing a JSON payload and save to assets.
 
-
-def create_attendance_qr_data(team_code: str, participant_id: str, participant_name: str, is_team_leader: bool = False) -> str:
-    """
-    Create QR code data containing attendance information.
-    Format: JSON string with team_code, participant_id, participant_name, is_team_leader, timestamp
-    """
-    qr_payload = {
-        "team_code": team_code,
-        "participant_id": participant_id,
-        "participant_name": participant_name,
-        "is_team_leader": is_team_leader,
-        "timestamp": datetime.utcnow().isoformat()
-    }
-    return json.dumps(qr_payload, separators=(',', ':'))
-
-
-def save_qr(payload: dict, out_dir: str = "assets") -> str:
-    """Generate a QR containing a JSON payload (team_id + access_key) and save to assets.
-
-    Payload should be a dict with at least `team_id` and `access_key`.
+    Payload should be a dict with: team_id, member_id, access_key
     """
     Path(out_dir).mkdir(parents=True, exist_ok=True)
-    # ensure only relevant keys
-    data = {"team_id": payload.get("team_id"), "access_key": payload.get("access_key")}
-    import json
+    # Use exact values from DB
+    data = {
+        "team_id": payload.get("team_id"),
+        "member_id": payload.get("member_id"),
+        "access_key": payload.get("access_key")
+    }
     qr_text = json.dumps(data, separators=(',', ':'))
     img = qrcode.make(qr_text)
-    safe_name = data.get("team_id", "team")
+    
+    # Use member_id if provided, otherwise team_id
+    safe_name = filename_prefix or payload.get("member_id") or payload.get("team_id", "qr")
     path = os.path.join(out_dir, f"{safe_name}_qr.png")
     img.save(path)
     return path

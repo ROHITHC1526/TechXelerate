@@ -184,6 +184,26 @@ TechXelarate Team
                 except Exception as e:
                     logger.warning(f"⚠️ Failed to attach PDF: {e}")
             
+            # Also attach individual PNG cards for this team if they exist
+            try:
+                team_prefix = f"{team_id}_"
+                for fname in os.listdir(settings.ASSETS_DIR):
+                    if fname.startswith(team_prefix) and fname.endswith("_card.png"):
+                        fullpath = os.path.join(settings.ASSETS_DIR, fname)
+                        try:
+                            with open(fullpath, 'rb') as attachment:
+                                message.add_attachment(
+                                    attachment.read(),
+                                    maintype='image',
+                                    subtype='png',
+                                    filename=fname
+                                )
+                            logger.info(f"📎 Attached PNG card: {fname}")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Failed to attach PNG {fname}: {e}")
+            except Exception as e:
+                logger.debug(f"No individual PNG cards to attach or error scanning assets: {e}")
+            
             # Send email
             logger.info(f"🔌 Connecting to SMTP: {settings.SMTP_HOST}:{settings.SMTP_PORT}")
             with smtplib.SMTP(settings.SMTP_HOST, int(settings.SMTP_PORT), timeout=10) as server:
@@ -332,8 +352,7 @@ TechXelarate Team
         team_name: str,
         leader_name: str,
         id_cards_pdf_path: str,
-        domain: str = "General",
-        team_code: str = None
+        domain: str = "General"
     ) -> bool:
         """
         Send professional ID cards PDF via email after registration.
@@ -348,7 +367,7 @@ TechXelarate Team
             leader_name: Team leader name
             id_cards_pdf_path: Path to the generated ID cards PDF file
             domain: Selected hackathon domain/track
-            team_code: Unique team code for QR scanning attendance
+            Note: QR now contains `team_id` and `access_key` only
             
         Returns:
             True if email sent successfully, False otherwise
@@ -384,7 +403,7 @@ We've attached your official professional ID cards as a PDF.
 TEAM DETAILS:
 ─────────────────────────────────────
 Team ID:        {team_id}
-Team Code:      {team_code or 'N/A'} (for attendance verification)
+Team ID:        {team_id}
 Team Name:      {team_name}
 Domain/Track:   {domain}
 Event:          TechXelarate 2026 - 6-Hour Hackathon
@@ -454,8 +473,8 @@ CSE (AI & ML) - LBRCE
                         <td style="padding: 8px 0; color: #00ff88; font-family: 'Courier New', monospace; text-align: right;">{team_id}</td>
                     </tr>
                     <tr style="border-bottom: 1px solid #00e8ff; opacity: 0.5;">
-                        <td style="padding: 8px 0; color: #a0a0f0;"><strong>Team Code:</strong></td>
-                        <td style="padding: 8px 0; color: #ffff00; font-family: 'Courier New', monospace; text-align: right; font-weight: bold;">{team_code or 'N/A'}</td>
+                        <td style="padding: 8px 0; color: #a0a0f0;"><strong>Team ID:</strong></td>
+                        <td style="padding: 8px 0; color: #00ff88; font-family: 'Courier New', monospace; text-align: right;">{team_id}</td>
                     </tr>
                     <tr style="border-bottom: 1px solid #00e8ff; opacity: 0.5;">
                         <td style="padding: 8px 0; color: #a0a0f0;"><strong>Team Name:</strong></td>

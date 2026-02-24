@@ -48,30 +48,6 @@ async def migrate_database():
             await conn.run_sync(Base.metadata.create_all)
             logger.info("✅ Base schema created/verified")
             
-            # Check if team_code column already exists
-            result = await conn.execute(
-                text("""
-                    SELECT EXISTS (
-                        SELECT 1 FROM information_schema.columns 
-                        WHERE table_name='teams' AND column_name='team_code'
-                    )
-                """)
-            )
-            team_code_exists = result.scalar()
-            
-            if not team_code_exists:
-                logger.info("📝 Adding missing team_code column...")
-                try:
-                    await conn.execute(text("""
-                        ALTER TABLE teams 
-                        ADD COLUMN team_code VARCHAR(32) UNIQUE NOT NULL DEFAULT '';
-                    """))
-                    logger.info("✅ team_code column added")
-                except Exception as e:
-                    logger.warning(f"⚠️  team_code column: {e}")
-            else:
-                logger.info("✅ team_code column already exists")
-            
             # Check if leader_email has unique constraint
             result = await conn.execute(
                 text("""
@@ -97,28 +73,7 @@ async def migrate_database():
             else:
                 logger.info("✅ Unique constraint on leader_email already exists")
             
-            # Check if indexes exist
-            result = await conn.execute(
-                text("""
-                    SELECT EXISTS (
-                        SELECT 1 FROM pg_indexes 
-                        WHERE tablename='teams' AND indexname='ix_teams_team_code'
-                    )
-                """)
-            )
-            team_code_index_exists = result.scalar()
-            
-            if not team_code_index_exists:
-                logger.info("📝 Adding index on team_code...")
-                try:
-                    await conn.execute(text("""
-                        CREATE INDEX ix_teams_team_code ON teams(team_code);
-                    """))
-                    logger.info("✅ Index created on team_code")
-                except Exception as e:
-                    logger.warning(f"⚠️  team_code index: {e}")
-            else:
-                logger.info("✅ Index on team_code already exists")
+            # (Removed legacy team_code index checks; project uses team_id)
             
             # Check and create index on leader_email
             result = await conn.execute(

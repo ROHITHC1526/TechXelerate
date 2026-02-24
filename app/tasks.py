@@ -107,7 +107,6 @@ def generate_assets_and_email(team_dict: dict) -> dict:
             # Prepare team_data for PDF generator
             team_data = {
                 'team_id': team_id,
-                'team_code': team_dict.get('team_code', 'UNKNOWN'),  # Add team code for QR data
                 'team_name': team_dict.get('team_name', 'Unknown Team'),
                 'leader_name': team_dict.get('leader_name', ''),
                 'year': team_dict.get('year', ''),
@@ -171,8 +170,7 @@ def generate_assets_and_email(team_dict: dict) -> dict:
                 team_name=team_dict.get('team_name', 'Unknown Team'),
                 leader_name=team_dict.get('leader_name', 'Participant'),
                 id_cards_pdf_path=pdf_path,
-                domain=team_dict.get('domain', 'General'),
-                team_code=team_dict.get('team_code', None)  # Add team code
+                domain=team_dict.get('domain', 'General')
             )
             
             if email_result:

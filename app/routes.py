@@ -3,14 +3,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from .schemas import RegisterIn, OTPIn, TeamOut, AdminLogin, DownloadIDIn, CheckinIn, AttendanceQRIn
 from .db import get_db, AsyncSessionLocal
-from .models import Team
+from .models import Team, TeamMember
 from .config import settings
+from .attendance_helper import mark_attendance_from_qr
 from .auth import create_access_token, get_password_hash, verify_password, get_current_admin
-from .utils import generate_otp, generate_access_key, generate_team_id, generate_unique_team_code, generate_participant_id, create_attendance_qr_data
+from .utils import generate_otp, generate_access_key, generate_team_id, generate_next_team_id
 from .tasks import send_otp_email_sync, generate_assets_and_email
 from .otp_manager import store_otp, get_otp, verify_otp as verify_otp_from_manager, delete_otp, store_registration_data, get_registration_data, delete_registration_data
 from .email_service import EmailService
 from .verify_otp_service import verify_otp_endpoint as enhanced_verify_otp
+from .qr_scanner_service import get_qr_scanner, QRNotDetectedError, InvalidQRDataError, InvalidImageError
 from datetime import datetime
 import json
 import logging
@@ -281,25 +283,33 @@ async def export_teams(domain: str = None, year: str = None, attendance: str = N
     q = select(Team)
     if domain:
         q = q.where(Team.domain == domain)
-    if year:
-        q = q.where(Team.year == year)
-    if attendance is not None:
-        if attendance.lower() in ('true', '1'):
-            q = q.where(Team.attendance_status == True)
-        elif attendance.lower() in ('false', '0'):
-            q = q.where(Team.attendance_status == False)
 
     res = await db.execute(q)
-    rows = res.scalars().all()
+    teams = res.scalars().all()
 
     output = StringIO()
     writer = csv.writer(output)
-    writer.writerow(["team_id","team_name","leader_name","leader_email","leader_phone","college_name","year","domain","team_members","access_key","qr_code_path","id_cards_pdf_path","attendance_status","checkin_time","created_at"])
-    for t in rows:
+    writer.writerow(["team_id", "team_name", "college_name", "domain", "total_members", "present_count", "absent_count", "created_at"])
+    
+    for team in teams:
+        # Get member stats for this team
+        members_q = await db.execute(
+            select(TeamMember).where(TeamMember.team_id == team.team_id)
+        )
+        members = members_q.scalars().all()
+        
+        present_count = sum(1 for m in members if m.attendance_status)
+        absent_count = len(members) - present_count
+        
         writer.writerow([
-            t.team_id, t.team_name, t.leader_name, t.leader_email, t.leader_phone, t.college_name,
-            t.year, t.domain, json.dumps(t.team_members), t.access_key, t.qr_code_path, t.id_cards_pdf_path,
-            str(bool(t.attendance_status)), t.checkin_time.isoformat() if t.checkin_time else '', t.created_at.isoformat() if t.created_at else ''
+            team.team_id, 
+            team.team_name, 
+            team.college_name,
+            team.domain, 
+            len(members),
+            present_count,
+            absent_count,
+            team.created_at.isoformat() if team.created_at else ''
         ])
 
     from fastapi.responses import StreamingResponse
@@ -308,49 +318,94 @@ async def export_teams(domain: str = None, year: str = None, attendance: str = N
 
 
 @router.get('/admin/teams')
-async def list_teams(page: int = 1, page_size: int = 50, search: str = None, domain: str = None, year: str = None, attendance: str = None, db: AsyncSession = Depends(get_db), _admin=Depends(get_current_admin)):
+async def list_teams(page: int = 1, page_size: int = 50, search: str = None, domain: str = None, attendance: str = None, db: AsyncSession = Depends(get_db), _admin=Depends(get_current_admin)):
+    """
+    List teams with member attendance statistics.
+    
+    Args:
+        page: Page number (1-indexed)
+        page_size: Results per page
+        search: Search by team_id or team_name
+        domain: Filter by domain
+        attendance: Filter by attendance status ('true' or 'false')
+        db: Database session
+        _admin: Authenticated admin user
+    """
     q = select(Team)
     if search:
         q = q.where(Team.team_id.ilike(f"%{search}%"))
     if domain:
         q = q.where(Team.domain == domain)
-    if year:
-        q = q.where(Team.year == year)
-    if attendance is not None:
-        if attendance.lower() in ('true','1'):
-            q = q.where(Team.attendance_status == True)
-        elif attendance.lower() in ('false','0'):
-            q = q.where(Team.attendance_status == False)
 
     total_q = await db.execute(select(func.count(Team.id)))
     total = total_q.scalar() or 0
     q = q.offset((page-1)*page_size).limit(page_size)
     res = await db.execute(q)
-    rows = res.scalars().all()
+    teams = res.scalars().all()
+    
     out = []
-    for t in rows:
+    for team in teams:
+        # Get member stats for this team
+        members_q = await db.execute(
+            select(TeamMember).where(TeamMember.team_id == team.team_id)
+        )
+        members = members_q.scalars().all()
+        
+        present_count = sum(1 for m in members if m.attendance_status)
+        absent_count = len(members) - present_count
+        
+        # Apply attendance filter if specified
+        if attendance is not None:
+            if attendance.lower() in ('true', '1'):
+                if present_count == 0:  # No members present
+                    continue
+            elif attendance.lower() in ('false', '0'):
+                if absent_count == 0:  # All members present
+                    continue
+        
+        # Get team leader info
+        leader = None
+        for m in members:
+            if m.is_team_leader:
+                leader = m
+                break
+        
         out.append({
-            'team_id': t.team_id,
-            'team_name': t.team_name,
-            'leader_name': t.leader_name,
-            'leader_email': t.leader_email,
-            'domain': t.domain,
-            'year': t.year,
-            'attendance_status': bool(t.attendance_status),
-            'checkin_time': t.checkin_time.isoformat() if t.checkin_time else None,
+            'team_id': team.team_id,
+            'team_name': team.team_name,
+            'leader_name': leader.name if leader else 'N/A',
+            'leader_email': leader.email if leader else 'N/A',
+            'domain': team.domain,
+            'total_members': len(members),
+            'present_count': present_count,
+            'absent_count': absent_count,
         })
     return { 'total': total, 'page': page, 'page_size': page_size, 'items': out }
 
 
 @router.get("/stats")
 async def stats(db: AsyncSession = Depends(get_db)):
+    """Get hackathon statistics."""
     total_teams_q = await db.execute(select(func.count(Team.id)))
     total_teams = total_teams_q.scalar() or 0
-    total_participants_q = await db.execute(select(func.sum(func.json_array_length(Team.team_members))))
-    total_participants = total_participants_q.scalar() or 0
+    
+    total_members_q = await db.execute(select(func.count(TeamMember.id)))
+    total_members = total_members_q.scalar() or 0
+    
+    present_members_q = await db.execute(select(func.count(TeamMember.id)).where(TeamMember.attendance_status == True))
+    present_members = present_members_q.scalar() or 0
+    
     domain_q = await db.execute(select(Team.domain, func.count(Team.id)).group_by(Team.domain))
     domain_dist = {row[0]: row[1] for row in domain_q.all()}
-    return {"total_teams": total_teams, "total_participants": total_participants, "domain_distribution": domain_dist}
+    
+    return {
+        "total_teams": total_teams,
+        "total_members": total_members,
+        "present_members": present_members,
+        "absent_members": total_members - present_members,
+        "attendance_rate": f"{(present_members / total_members * 100):.2f}%" if total_members > 0 else "0%",
+        "domain_distribution": domain_dist
+    }
 
 
 @router.post("/download-id")
@@ -417,98 +472,251 @@ async def checkin(payload: CheckinIn, db: AsyncSession = Depends(get_db)):
 @router.post("/attendance/scan")
 async def scan_attendance_qr(payload: AttendanceQRIn, db: AsyncSession = Depends(get_db)):
     """
-    Scan attendance QR code from ID card to mark participant as present.
-    Expects JSON with team_code, participant_id, participant_name, is_team_leader.
-    
-    Updates team attendance status in database when scanned.
+    Scan attendance QR code (JSON) and mark team attendance.
+
+    Expected QR JSON: {"team_id": "HACKCSM-001", "access_key": "..."}
     """
     try:
-        import json
-        
-        qr_data_str = payload.qr_data.strip()
-        logger.info(f"🔍 Scanning QR code: {qr_data_str[:50]}...")
-        
-        # Parse QR code data (JSON format)
+        # Use the QRScanner's tolerant parser so small formatting differences
+        # (single quotes, nested payloads, alternative key names) are accepted.
+        scanner = get_qr_scanner()
         try:
-            qr_data = json.loads(qr_data_str)
-        except json.JSONDecodeError:
-            logger.error(f"Invalid JSON in QR code: {qr_data_str}")
-            raise HTTPException(status_code=400, detail="❌ Invalid QR code format")
-        
-        team_code = qr_data.get("team_code")
-        participant_id = qr_data.get("participant_id")
-        participant_name = qr_data.get("participant_name", "Unknown")
-        is_team_leader = qr_data.get("is_team_leader", False)
-        
-        if not team_code or not participant_id:
-            raise HTTPException(status_code=400, detail="❌ Invalid QR code: missing team_code or participant_id")
-        
-        logger.info(f"📱 QR Scanned - Team Code: {team_code}, Participant: {participant_name} ({participant_id})")
-        
-        # Find team by team_code
-        team_q = await db.execute(select(Team).where(Team.team_code == team_code))
+            qr_data = scanner.parse_qr_data(payload.qr_data.strip())
+        except InvalidQRDataError as e:
+            logger.error(f"Invalid QR data: {e}")
+            raise HTTPException(status_code=400, detail=f"❌ Invalid QR code: {str(e)}")
+
+        team_id = qr_data.get("team_id")
+        access_key = qr_data.get("access_key")
+
+        if not team_id or not access_key:
+            raise HTTPException(status_code=400, detail="❌ Invalid QR code: missing team_id or access_key")
+
+        # Query DB for team with matching team_id & access_key
+        team_q = await db.execute(select(Team).where(Team.team_id == team_id, Team.access_key == access_key))
         team = team_q.scalars().first()
-        
+
         if not team:
-            logger.warning(f"⚠️ Team not found for code: {team_code}")
-            raise HTTPException(status_code=404, detail=f"❌ Team code {team_code} not found")
-        
-        logger.info(f"✅ Found team: {team.team_name} ({team.team_id})")
-        
-        # Update team attendance status
+            logger.warning(f"Invalid QR or team not found: {team_id}")
+            raise HTTPException(status_code=404, detail="❌ Invalid QR or team not found")
+
+        if team.attendance_status:
+            return {"status": "already_present", "message": "Already marked present", "team_id": team.team_id}
+
         team.attendance_status = True
         if not team.checkin_time:
             team.checkin_time = datetime.utcnow()
-            logger.info(f"🕐 Set check-in time: {team.checkin_time}")
-        
+
         await db.commit()
-        
-        role = "Team Lead" if is_team_leader else "Team Member"
-        
-        logger.info(f"✅ Attendance marked: {participant_name} ({role}) | Team: {team.team_name}")
-        
-        # Return success response with team details
+
         return {
-            "message": f"✅ Welcome {participant_name}!",
             "status": "success",
+            "message": f"✅ {team.team_name} checked in successfully",
             "team_id": team.team_id,
-            "team_code": team_code,
             "team_name": team.team_name,
-            "leader_name": team.leader_name,
-            "domain": team.domain or "Not Specified",
-            "year": team.year or "Not Specified",
-            "participant_name": participant_name,
-            "participant_id": participant_id,
-            "role": role,
-            "attendance_status": "checked_in",
+            "attendance_status": True,
             "checkin_time": team.checkin_time.isoformat() if team.checkin_time else None
         }
-    
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Error scanning QR code: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail=f"❌ Invalid QR code: {str(e)}")
+        logger.exception("❌ Error scanning QR code")
+        raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/team/by-code/{team_code}")
-async def get_team_by_code(team_code: str, db: AsyncSession = Depends(get_db)):
+
+@router.post("/attendance/scan-file")
+async def scan_attendance_file(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
     """
-    Get team information by unique team code.
-    Useful for verifying registration and team details.
+    Accept an uploaded image file, decode QR, validate in DB, and update attendance.
     """
     try:
-        team_q = await db.execute(select(Team).where(Team.team_code == team_code))
+        # Read file bytes
+        content = await file.read()
+        filename = file.filename or "uploaded_image"
+        content_type = file.content_type or "application/octet-stream"
+
+        logger.info(f"📥 Received file for QR scanning: {filename} ({content_type})")
+
+        # Scan the image for QR data
+        scanner = get_qr_scanner()
+        try:
+            qr_data = await scanner.scan_file(content, filename, content_type)
+        except InvalidImageError as ie:
+            logger.warning(f"Invalid image: {ie}")
+            raise HTTPException(status_code=400, detail=str(ie))
+        except QRNotDetectedError as qe:
+            logger.warning(f"QR not detected: {qe}")
+            raise HTTPException(status_code=404, detail=str(qe))
+        except InvalidQRDataError as qe:
+            logger.warning(f"Invalid QR data: {qe}")
+            raise HTTPException(status_code=400, detail=str(qe))
+
+        team_id = qr_data.get("team_id")
+        access_key = qr_data.get("access_key")
+
+        if not team_id or not access_key:
+            logger.error("Missing team_id or access_key in QR data")
+            raise HTTPException(status_code=400, detail="Invalid QR data: missing team_id or access_key")
+
+        # Validate team in database
+        q = await db.execute(select(Team).where(Team.team_id == team_id, Team.access_key == access_key))
+        team = q.scalars().first()
+
+        if not team:
+            logger.warning(f"Team not found for id: {team_id}")
+            raise HTTPException(status_code=404, detail=f"Team {team_id} not found or invalid access_key")
+
+        # Update attendance
+        team.attendance_status = True
+        if not team.checkin_time:
+            team.checkin_time = datetime.utcnow()
+
+        await db.commit()
+        await db.refresh(team)
+
+        logger.info(f"✅ Attendance updated for participant {participant_name} ({participant_id}) in team {team.team_name}")
+
+        return {
+            "status": "success",
+            "message": f"Attendance marked for {team.team_name}",
+            "team_id": team.team_id,
+            "attendance_status": True,
+            "checkin_time": team.checkin_time.isoformat() if team.checkin_time else None
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"❌ Unexpected error in scan_attendance_file: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error while processing QR image")
+
+
+@router.post("/attendance/scan-member")
+async def scan_member_attendance(payload: AttendanceQRIn, db: AsyncSession = Depends(get_db)):
+    """
+    Member-level attendance scanning endpoint.
+    
+    Scans QR code with payload: {"team_id": "HACKCSM-001", "member_id": "<UUID>", "access_key": "..."}
+    
+    Each team member has unique member_id and access_key.
+    Marks that specific member as present.
+    
+    Returns:
+        - success: Member marked present
+        - already_present: Member already checked in
+        - error: Invalid QR or member not found
+    """
+    try:
+        # Parse QR JSON payload
+        qr_data_str = payload.qr_data.strip()
+        logger.info(f"📱 Scanning member QR code")
+        
+        try:
+            qr_data = json.loads(qr_data_str)
+        except json.JSONDecodeError:
+            logger.error("Invalid JSON in member QR code")
+            raise HTTPException(status_code=400, detail="❌ Invalid QR code format")
+        
+        team_id = qr_data.get("team_id")
+        member_id = qr_data.get("member_id")
+        member_access_key = qr_data.get("access_key")
+        
+        if not all([team_id, member_id, member_access_key]):
+            raise HTTPException(
+                status_code=400,
+                detail="❌ Invalid member QR code: missing team_id, member_id, or access_key"
+            )
+        
+        # Use attendance helper to mark member present
+        result = await mark_attendance_from_qr(
+            team_id=team_id,
+            member_id=member_id,
+            access_key=member_access_key,
+            db=db
+        )
+        
+        logger.info(f"✅ Member attendance result: {result['status']}")
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"❌ Error in scan_member_attendance: {e}")
+        raise HTTPException(status_code=500, detail=f"Error processing member attendance: {str(e)}")
+
+
+@router.post("/attendance/scan-member-file")
+async def scan_member_attendance_file(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    """
+    Accept uploaded image file, decode member-level QR, validate, and mark member present.
+    """
+    try:
+        # Read file bytes
+        content = await file.read()
+        filename = file.filename or "member_qr_image"
+        
+        logger.info(f"📥 Received image file for member QR scanning: {filename}")
+        
+        # Scan the image for QR data
+        scanner = get_qr_scanner()
+        try:
+            qr_data = await scanner.scan_file(content, filename, file.content_type or "image/jpeg")
+        except InvalidImageError as ie:
+            logger.warning(f"Invalid image: {ie}")
+            raise HTTPException(status_code=400, detail=str(ie))
+        except QRNotDetectedError as qe:
+            logger.warning(f"QR not detected: {qe}")
+            raise HTTPException(status_code=404, detail=str(qe))
+        except InvalidQRDataError as qe:
+            logger.warning(f"Invalid QR data: {qe}")
+            raise HTTPException(status_code=400, detail=str(qe))
+        
+        team_id = qr_data.get("team_id")
+        member_id = qr_data.get("member_id")
+        member_access_key = qr_data.get("access_key")
+        
+        if not all([team_id, member_id, member_access_key]):
+            logger.error("Missing required fields in member QR data")
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid member QR data: missing team_id, member_id, or access_key"
+            )
+        
+        # Use attendance helper to mark member present
+        result = await mark_attendance_from_qr(
+            team_id=team_id,
+            member_id=member_id,
+            access_key=member_access_key,
+            db=db
+        )
+        
+        logger.info(f"✅ Member attendance from file: {result['status']}")
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"❌ Error in scan_member_attendance_file: {e}")
+        raise HTTPException(status_code=500, detail=f"Error processing member QR file: {str(e)}")
+
+
+@router.get("/team/{team_id}")
+async def get_team_by_id(team_id: str, db: AsyncSession = Depends(get_db)):
+    """Get team information by `team_id` (e.g. HACKCSM-001)."""
+    try:
+        team_q = await db.execute(select(Team).where(Team.team_id == team_id))
         team = team_q.scalars().first()
         
         if not team:
-            raise HTTPException(status_code=404, detail=f"❌ Team code {team_code} not found")
+            raise HTTPException(status_code=404, detail=f"❌ Team {team_id} not found")
         
-        logger.info(f"✅ Retrieved team info for code: {team_code}")
+        logger.info(f"✅ Retrieved team info for id: {team_id}")
         
         return {
             "team_id": team.team_id,
-            "team_code": team.team_code,
             "team_name": team.team_name,
             "leader_name": team.leader_name,
             "leader_email": team.leader_email,
@@ -519,13 +727,13 @@ async def get_team_by_code(team_code: str, db: AsyncSession = Depends(get_db)):
             "attendance_status": team.attendance_status,
             "checkin_time": team.checkin_time.isoformat() if team.checkin_time else None,
             "created_at": team.created_at.isoformat() if team.created_at else None,
-            "team_members_count": len(team.team_members) if isinstance(team.team_members, list) else (len(json.loads(team.team_members) if isinstance(team.team_members, str) else []) if team.team_members else 0)
+            "team_members_count": len(team.team_members) if isinstance(team.team_members, list) else 0
         }
     
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error fetching team by code: {str(e)}")
+        logger.error(f"Error fetching team by id: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
 
 
@@ -552,6 +760,65 @@ async def test_email(payload: dict):
     except Exception as e:
         logger.exception("Failed to send test email to %s", email)
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+@router.get("/team/{team_id}/members")
+async def get_team_members_attendance(team_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    Get all team members and their individual attendance status.
+    
+    Args:
+        team_id: Team ID (e.g., HACKCSM-001)
+        
+    Returns:
+        Team info with list of members and their attendance status
+    """
+    try:
+        # Get team
+        team_q = await db.execute(select(Team).where(Team.team_id == team_id))
+        team = team_q.scalars().first()
+        
+        if not team:
+            raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
+        
+        # Get all members for this team
+        members_q = await db.execute(
+            select(TeamMember).where(TeamMember.team_id == team_id)
+        )
+        members = members_q.scalars().all()
+        
+        members_data = []
+        for member in members:
+            members_data.append({
+                "member_id": str(member.id),
+                "name": member.name,
+                "email": member.email,
+                "phone": member.phone,
+                "is_team_leader": member.is_team_leader,
+                "attendance_status": member.attendance_status,
+                "checkin_time": member.checkin_time.isoformat() if member.checkin_time else None,
+                "created_at": member.created_at.isoformat() if member.created_at else None
+            })
+        
+        # Calculate team statistics
+        present_count = sum(1 for m in members if m.attendance_status)
+        
+        return {
+            "team_id": team.team_id,
+            "team_name": team.team_name,
+            "college_name": team.college_name,
+            "domain": team.domain,
+            "total_members": len(members),
+            "present_count": present_count,
+            "absent_count": len(members) - present_count,
+            "members": members_data
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"❌ Error fetching team members: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching team members: {str(e)}")
 
 
 @router.websocket('/ws/stats')

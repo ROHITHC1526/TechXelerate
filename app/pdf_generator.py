@@ -55,7 +55,7 @@ class IDCardGenerator:
         Generate ID cards for all team members in a single PDF.
         
         Args:
-            team_data: Dictionary with team_id, team_code, team_name, domain, year, etc.
+            team_data: Dictionary with team_id, team_name, domain, year, access_key, etc.
             team_members_list: List of dicts with {name, email, photo_path, participant_id}
            output_filename: Name of output PDF file
             
@@ -369,10 +369,10 @@ class IDCardGenerator:
         
         y_pos = 650
         
-        # Team Code (small, at top)
-        team_code = team_data.get('team_code', '')
-        if team_code:
-            code_text = f"Code: {team_code}"
+        # Team ID (small, at top)
+        team_id_small = team_data.get('team_id', '')
+        if team_id_small:
+            code_text = f"{team_id_small}"
             bbox = draw.textbbox((0, 0), code_text, font=code_font)
             code_width = bbox[2] - bbox[0]
             x_code = (self.card_width_px - code_width) // 2
@@ -450,22 +450,12 @@ class IDCardGenerator:
     def _add_qr_code(self, img: PILImage.Image, team_data: dict, member: dict, member_idx: int):
         """Generate and add QR code with team code and participant information."""
         try:
-            # Import the create_attendance_qr_data function from utils
-            from .utils import create_attendance_qr_data
-            
-            # Get the team code and participant ID from team_data and member
-            team_code = team_data.get('team_code', 'UNKNOWN')
-            participant_id = member.get('participant_id', f'{team_code}-{member_idx:03d}')
-            participant_name = member.get('name', 'MEMBER')
-            is_team_leader = member.get('is_team_leader', False)
-            
-            # Create QR code data with attendance information
-            qr_data = create_attendance_qr_data(
-                team_code=team_code,
-                participant_id=participant_id,
-                participant_name=participant_name,
-                is_team_leader=is_team_leader
-            )
+            # Create QR payload containing only team_id and access_key
+            import json
+            team_id_val = team_data.get('team_id')
+            access_key_val = team_data.get('access_key')
+            qr_payload = {"team_id": team_id_val, "access_key": access_key_val}
+            qr_data = json.dumps(qr_payload, separators=(',', ':'))
             
             # Generate QR code
             qr = qrcode.QRCode(

@@ -5,21 +5,21 @@ Implements complete error handling, rate limiting, and security best practices.
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timedelta
 import logging
 import json
 import asyncio
+import os
 from typing import Optional, Dict
 
 from app.schemas import OTPIn, TeamOut
 from app.db import get_db
-from app.models import Team
+from app.models import Team, TeamMember
 from app.config import settings
 from app.utils import (
-    generate_unique_team_code,
-    generate_participant_id,
+    generate_next_team_id,
     generate_access_key,
     generate_otp
 )
@@ -33,6 +33,7 @@ from app.otp_manager import (
 )
 from app.email_service import EmailService
 from app.idcard_service import IDCardService
+from app.team_creation_service import create_team_and_members, generate_member_qr_codes
 
 logger = logging.getLogger(__name__)
 
@@ -91,18 +92,17 @@ def increment_otp_attempts(email: str):
 
 async def generate_id_cards_async(
     team_id: str,
-    team_code: str,
     team_members_list: list,
     team_data: dict
-) -> Optional[str]:
+) -> Optional[tuple]:
     """
     Asynchronously generate ID cards PDF.
     
     Args:
         team_id: Team ID
-        team_code: Team code
-        team_members_list: List of team members
+        team_members_list: List of team members with their access_keys
         team_data: Team information
+        member_qr_codes: Optional list of member QR code dictionaries with qr_path
         
     Returns:
         Path to generated PDF or None on error
@@ -111,14 +111,28 @@ async def generate_id_cards_async(
         logger.info(f"📱 Starting async ID card generation for team {team_id}")
         
         service = IDCardService(output_dir=settings.ASSETS_DIR)
+        # generate PDF containing all member cards
         pdf_path = service.generate_pdf(
             team_data=team_data,
             team_members=team_members_list,
             output_filename=f"{team_id}_id_cards.pdf"
         )
-        
         logger.info(f"✅ ID cards PDF generated: {pdf_path}")
-        return pdf_path
+        
+        # also export individual PNG cards per member
+        png_paths = []
+        for idx, member in enumerate(team_members_list):
+            try:
+                card_img = service.create_card_image(team_data, member, idx)
+                filename = f"{team_id}_{member.get('member_id', idx)}_card.png"
+                outpath = os.path.join(settings.ASSETS_DIR, filename)
+                card_img.save(outpath, 'PNG')
+                png_paths.append(outpath)
+                logger.info("ID card generated for member %s at %s", member.get('name'), outpath)
+            except Exception as e:
+                logger.error("❌ Failed to create PNG card for %s: %s", member.get('name'), e)
+        
+        return pdf_path, png_paths
         
     except Exception as e:
         logger.error(f"❌ Failed to generate ID cards: {e}")
@@ -131,8 +145,7 @@ async def send_email_async(
     team_name: str,
     leader_name: str,
     pdf_path: str,
-    domain: str,
-    team_code: str
+    domain: str
 ) -> bool:
     """
     Asynchronously send ID cards email.
@@ -144,7 +157,7 @@ async def send_email_async(
         leader_name: Leader name
         pdf_path: Path to PDF
         domain: Domain/track
-        team_code: Team code
+        # team_code removed - system uses team_id + access_key
         
     Returns:
         True if sent successfully
@@ -158,8 +171,7 @@ async def send_email_async(
             team_name=team_name,
             leader_name=leader_name,
             id_cards_pdf_path=pdf_path,
-            domain=domain,
-            team_code=team_code
+            domain=domain
         )
         
         if email_sent:
@@ -191,7 +203,7 @@ async def verify_otp_endpoint(
     On success:
     1. Validates OTP (must match, must not be expired)
     2. Prevents duplicate verification attempts
-    3. Creates Team record with unique team_code
+    3. Creates Team record with unique team_id and access_key
     4. Generates professional ID cards PDF
     5. Sends email with PDF attachment
     6. Clears temporary data
@@ -251,18 +263,33 @@ async def verify_otp_endpoint(
             )
         
         # ============================================================
-        # STEP 4: Check Email Not Already Registered
+        # STEP 4: Check Email Not Already Registered (check team members)
         # ============================================================
-        existing_team = await db.execute(
-            select(Team).where(Team.leader_email == payload.leader_email)
-        )
-        if existing_team.scalars().first():
-            logger.warning(f"❌ Email {payload.leader_email} already registered")
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="This email is already registered with a team. "
-                       "Use a different email to register a new team."
+        existing_member_q = await db.execute(
+            select(TeamMember).where(
+                TeamMember.email == payload.leader_email,
+                TeamMember.is_team_leader == True
             )
+        )
+        existing_leader = existing_member_q.scalars().first()
+        if existing_leader:
+            # ensure the referenced team row still exists
+            team_q = await db.execute(select(Team).where(Team.team_id == existing_leader.team_id))
+            team_obj = team_q.scalars().first()
+            if not team_obj:
+                # orphaned leader record detected; clean up and allow re-registration
+                logger.warning("⚠️ Orphaned team leader entry found for %s, deleting old records", payload.leader_email)
+                await db.execute(
+                    delete(TeamMember).where(TeamMember.team_id == existing_leader.team_id)
+                )
+                await db.commit()
+            else:
+                logger.warning(f"❌ Email {payload.leader_email} already registered as team leader")
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="This email is already registered with a team. "
+                           "Use a different email to register a new team."
+                )
         
         # ============================================================
         # STEP 5: Get Registration Data
@@ -279,13 +306,10 @@ async def verify_otp_endpoint(
         # ============================================================
         # STEP 6: Generate Team IDs and Codes
         # ============================================================
-        count_result = await db.execute(select(func.count(Team.id)))
-        seq = (count_result.scalar() or 0) + 1
-        team_id = generate_team_id_sequential(seq)
-        team_code = generate_unique_team_code()
-        access_key = generate_access_key(32)
-        
-        logger.info(f"Generated IDs - Team ID: {team_id}, Team Code: {team_code}")
+        # Generate sequential team_id (HACKCSM-XXX)
+        team_id = await generate_next_team_id(db)
+        access_key = generate_access_key(64)
+        logger.info(f"Generated Team ID - {team_id}")
         
         # ============================================================
         # STEP 7: Parse Team Members
@@ -324,12 +348,9 @@ async def verify_otp_endpoint(
                         logger.warning(f"Skipping unknown member format: {type(member_data)}")
                         continue
                     
-                    # Generate participant ID
-                    participant_id = generate_participant_id(team_code, idx)
-                    member['participant_id'] = participant_id
-                    
+                    # Keep member data as provided; do not generate team_code-based participant IDs
                     team_members_list.append(member)
-                    logger.debug(f"✓ Parsed member {idx}: {member.get('name')} ({participant_id})")
+                    logger.debug(f"✓ Parsed member {idx}: {member.get('name')}")
                     
                 except Exception as e:
                     logger.error(f"❌ Error parsing member {idx}: {e}")
@@ -345,27 +366,31 @@ async def verify_otp_endpoint(
         logger.info(f"✓ Parsed {len(team_members_list)} team members")
         
         # ============================================================
-        # STEP 8: Create Team Record
+        # STEP 8-10: Create Team, Members, and Generate QR/ID Cards
         # ============================================================
-        team = Team(
-            team_id=team_id,
-            team_code=team_code,
-            team_name=reg_data.get("team_name"),
-            leader_name=reg_data.get("leader_name"),
-            leader_email=reg_data.get("leader_email"),
-            leader_phone=reg_data.get("leader_phone"),
-            college_name=reg_data.get("college_name"),
-            year=reg_data.get("year"),
-            domain=reg_data.get("domain"),
-            team_members=team_members_list,
-            access_key=access_key,
-        )
-        
         try:
-            db.add(team)
-            await db.commit()
-            await db.refresh(team)
-            logger.info(f"✅ Team record created: {team_id}")
+            # Update registration_data with parsed team members (as dicts, not pipe-separated strings)
+            reg_data['team_members'] = team_members_list
+            
+            # Create team and team members using team_creation_service
+            team_result = await create_team_and_members(
+                leader_email=payload.leader_email,
+                db=db,
+                registration_data=reg_data
+            )
+            
+            team_id = team_result["team_id"]
+            members = team_result["members"]
+            logger.info(f"✅ Team {team_id} created with {team_result['member_count']} members")
+            
+            # Generate QR codes for each member
+            qr_codes = await generate_member_qr_codes(
+                team_id=team_id,
+                members=members,
+                out_dir="assets"
+            )
+            logger.info(f"✅ Generated {len(qr_codes)} member QR codes")
+            
         except IntegrityError as e:
             await db.rollback()
             logger.error(f"❌ Database integrity error: {e}")
@@ -373,34 +398,33 @@ async def verify_otp_endpoint(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Team creation failed due to duplicate data. Please try again."
             )
+        except HTTPException:
+            raise
         except Exception as e:
             await db.rollback()
-            logger.error(f"❌ Database error: {e}")
+            logger.error(f"❌ Team creation error: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to create team record. Please try again."
+                detail=f"Failed to create team. Please try again."
             )
         
         # ============================================================
-        # STEP 9: Generate ID Cards (with error handling)
+        # STEP 11: Generate ID Cards with individual QR codes
         # ============================================================
         team_data = {
             'team_id': team_id,
-            'team_code': team_code,
             'team_name': reg_data.get("team_name"),
-            'leader_name': reg_data.get("leader_name"),
-            'leader_email': reg_data.get("leader_email"),
             'college_name': reg_data.get("college_name"),
-            'year': reg_data.get("year"),
-            'domain': reg_data.get("domain"),
+            'domain': reg_data.get("domain")
         }
-        
-        pdf_path = await generate_id_cards_async(
+
+        result = await generate_id_cards_async(
             team_id=team_id,
-            team_code=team_code,
-            team_members_list=team_members_list,
+            team_members_list=members,
             team_data=team_data
         )
+        # result is tuple (pdf_path, png_list)
+        pdf_path, png_list = result if isinstance(result, tuple) else (result, [])
         
         if not pdf_path:
             logger.error(f"❌ ID card generation failed")
@@ -409,17 +433,20 @@ async def verify_otp_endpoint(
                 detail="Failed to generate ID cards. Please contact support."
             )
         
+        # log paths for debugging
+        for p in png_list:
+            logger.debug(f"Individual ID card saved: {p}")
+        
         # ============================================================
-        # STEP 10: Send Email with PDF Attachment
+        # STEP 12: Send Email with PDF Attachment
         # ============================================================
         email_sent = await send_email_async(
             to_email=reg_data.get("leader_email"),
             team_id=team_id,
             team_name=reg_data.get("team_name"),
-            leader_name=reg_data.get("leader_name"),
+            leader_name=members[0]["name"],  # First member is team leader
             pdf_path=pdf_path,
-            domain=reg_data.get("domain", "General"),
-            team_code=team_code
+            domain=reg_data.get("domain", "General")
         )
         
         if not email_sent:
@@ -430,7 +457,7 @@ async def verify_otp_endpoint(
             )
         
         # ============================================================
-        # STEP 11: Clean Up Temporary Data
+        # STEP 13: Clean Up Temporary Data
         # ============================================================
         delete_otp(payload.leader_email)
         delete_registration_data(payload.leader_email)
@@ -441,20 +468,17 @@ async def verify_otp_endpoint(
         logger.info(f"✅ Team {team_id} successfully created and registered")
         
         # ============================================================
-        # STEP 12: Return Success Response
+        # STEP 14: Return Success Response
         # ============================================================
+        # Get the created team to return
+        team_q = await db.execute(select(Team).where(Team.team_id == team_id))
+        team = team_q.scalars().first()
+        
         return TeamOut(
-            id=str(team.id),
             team_id=team.team_id,
-            team_code=team.team_code,
             team_name=team.team_name,
-            leader_name=team.leader_name,
-            leader_email=team.leader_email,
             college_name=team.college_name,
-            year=team.year,
             domain=team.domain,
-            attendance_status=team.attendance_status,
-            checkin_time=team.checkin_time,
             created_at=team.created_at
         )
     

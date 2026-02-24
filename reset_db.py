@@ -12,9 +12,10 @@ from app.db import engine
 async def reset_database():
     """Drop all tables and recreate empty structure."""
     async with engine.begin() as conn:
-        # Drop all tables
+        # Drop all tables (teams and team_members)
+        await conn.execute(text("DROP TABLE IF EXISTS team_members CASCADE"))
         await conn.execute(text("DROP TABLE IF EXISTS teams CASCADE"))
-        print("✓ Dropped all tables")
+        print("✓ Dropped teams and team_members tables")
         
         # Recreate schema by importing models
         from app.models import Base
@@ -25,6 +26,9 @@ async def reset_database():
         result = await conn.execute(text("SELECT COUNT(*) FROM teams"))
         count = result.scalar()
         print(f"✓ Teams table has {count} records (should be 0)")
+        result2 = await conn.execute(text("SELECT COUNT(*) FROM team_members"))
+        count2 = result2.scalar()
+        print(f"✓ Team_members table has {count2} records (should be 0)")
 
 async def verify_connection():
     """Test database connection."""
