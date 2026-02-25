@@ -363,13 +363,16 @@ async def verify_otp_endpoint(
                 detail=f"Failed to create team. Please try again."
             )
         
-        # STEP 11 & 12: Confirmation email only (no attachments)
+        # STEP 11 & 12: Confirmation email with full team details (no attachments)
         EmailService.send_registration_confirmation(
             to_email=reg_data.get("leader_email"),
             leader_name=reg_data.get("leader_name"),
             team_name=reg_data.get("team_name"),
             team_id=team_id,
-            pdf_path=None
+            college_name=reg_data.get("college_name"),
+            domain=reg_data.get("domain"),
+            year=reg_data.get("year"),
+            team_members=team_members_list
         )
         
         # ============================================================

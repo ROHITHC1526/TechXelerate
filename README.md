@@ -26,8 +26,7 @@ confirmation emails without attachments.
 - `/api/attendance/scan` and related endpoints return **410 Gone**.
 - OTP verification still creates teams and members but does **not** generate
   any PDF/PNG assets.
-- Confirmation emails contain the same textual details as before but no
-  attachments.
+- Confirmation emails now include the **full team breakdown** (leader name, college, academic year, domain/track, team ID, and a list of all members with emails/phones) but still contain no attachments.
 
 To re-enable the full feature set, revert the changes in
 `app/verify_otp_service.py`, `app/routes.py`, and `app/email_service.py`.

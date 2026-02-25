@@ -25,17 +25,28 @@ class EmailService:
         return True, ""
     
     @staticmethod
-    def send_registration_confirmation(to_email: str, leader_name: str, team_name: str, team_id: str, pdf_path: str = None) -> bool:
+    def send_registration_confirmation(
+        to_email: str,
+        leader_name: str,
+        team_name: str,
+        team_id: str,
+        college_name: str,
+        domain: str,
+        year: str,
+        team_members: list[dict]
+    ) -> bool:
         """
-        Send simple registration confirmation email after team registered.
-        Attachments (PDF/PNG) are disabled; only text/HTML content is sent.
+        Send registration confirmation email including full team details.
+        Attachments are disabled; only text/HTML content is sent.
         
         Args:
             to_email: Recipient email address
             leader_name: Team leader name
             team_name: Team name
             team_id: Team unique identifier
-            pdf_path: Ignored (legacy parameter)
+            college_name: Name of the institution
+            domain: Selected hackathon domain/track
+            team_members: List of dictionaries with member info (name, email, phone, etc.)
         
         Returns:
             True if email sent successfully, False otherwise
@@ -52,6 +63,17 @@ class EmailService:
             message["To"] = to_email
             message["Subject"] = "✅ TechXelarate - Registration Confirmed!"
             
+            # construct plain text listing of members
+            member_lines = []
+            for idx, m in enumerate(team_members, start=1):
+                name = m.get("name") or "(unknown)"
+                email = m.get("email") or ""
+                phone = m.get("phone") or ""
+                leader_marker = " (Leader)" if m.get("is_team_leader") else ""
+                member_lines.append(f"{idx}. {name}{leader_marker} - {email} {phone}")
+
+            member_section = "\n".join(member_lines)
+
             plain_body = f"""
 TechXelarate 2026 - Registration Confirmed!
 
@@ -59,7 +81,13 @@ Hello {leader_name},
 
 Congratulations! Your team '{team_name}' has been successfully registered for TechXelarate 2026.
 
-Your Team ID: {team_id}
+Team ID: {team_id}
+College/Institution: {college_name}
+Academic Year: {year}
+Domain/Track: {domain}
+
+Team Members:
+{member_section}
 
 ✅ What's Next:
 1. Save this Team ID for event check-in
@@ -78,6 +106,20 @@ Best Regards,
 TechXelarate Team
 """
             
+            # build HTML rows for team members
+            member_rows = []
+            for m in team_members:
+                name = m.get("name", "")
+                email = m.get("email", "")
+                phone = m.get("phone", "")
+                leader_label = "<strong>(Leader)</strong>" if m.get("is_team_leader") else ""
+                member_rows.append(
+                    f"<tr><td style='padding:5px 10px;'>{name} {leader_label}</td>"
+                    f"<td style='padding:5px 10px;'>{email}</td>"
+                    f"<td style='padding:5px 10px;'>{phone}</td></tr>"
+                )
+            member_table = "".join(member_rows)
+
             html_body = f"""
 <html>
     <body style="font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; background-color: #0a0e27;">
@@ -96,6 +138,13 @@ TechXelarate Team
                 <strong style="color: #00e8ff;">TechXelarate 2026</strong>.
             </p>
             
+            <!-- Team Info -->
+            <p style="color: #d0d0d0; font-size: 14px; margin: 10px 0;">
+                <strong>College:</strong> {college_name}<br>
+                <strong>Academic Year:</strong> {year}<br>
+                <strong>Domain/Track:</strong> {domain}
+            </p>
+
             <!-- Team ID Block -->
             <div style="background: linear-gradient(90deg, rgba(0,255,136,0.2) 0%, rgba(0,232,255,0.1) 100%); 
                         border: 3px solid #00ff88; padding: 20px; border-radius: 10px; 
@@ -108,6 +157,20 @@ TechXelarate Team
                     💾 Save this Team ID - you'll need it for event check-in!
                 </p>
             </div>
+
+            <!-- Members Table -->
+            <table style="width:100%; border-collapse: collapse; color: #d0d0d0;">
+                <thead>
+                    <tr>
+                        <th style="text-align:left; padding:5px;">Name</th>
+                        <th style="text-align:left; padding:5px;">Email</th>
+                        <th style="text-align:left; padding:5px;">Phone</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {member_table}
+                </tbody>
+            </table>
             
             <!-- Footer -->
             <div style="border-top: 1px solid #00e8ff; margin-top: 30px; padding-top: 20px; 
