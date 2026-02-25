@@ -1,18 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, WebSocket, WebSocketDisconnect, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from .schemas import RegisterIn, OTPIn, TeamOut, AdminLogin, DownloadIDIn, CheckinIn, AttendanceQRIn
+from .schemas import RegisterIn, OTPIn, TeamOut, AdminLogin, DownloadIDIn
 from .db import get_db, AsyncSessionLocal
 from .models import Team, TeamMember
 from .config import settings
-from .attendance_helper import mark_attendance_from_qr
 from .auth import create_access_token, get_password_hash, verify_password, get_current_admin
 from .utils import generate_otp, generate_access_key, generate_team_id, generate_next_team_id
 from .tasks import send_otp_email_sync, generate_assets_and_email
 from .otp_manager import store_otp, get_otp, verify_otp as verify_otp_from_manager, delete_otp, store_registration_data, get_registration_data, delete_registration_data
 from .email_service import EmailService
 from .verify_otp_service import verify_otp_endpoint as enhanced_verify_otp
-from .qr_scanner_service import get_qr_scanner, QRNotDetectedError, InvalidQRDataError, InvalidImageError
+# QR scanning and check‑in removed; related module deleted
+
 from datetime import datetime
 import json
 import logging
@@ -433,274 +433,51 @@ async def download_id_get(team_id: str, access_key: str, db: AsyncSession = Depe
 
 
 @router.post("/checkin")
-async def checkin(payload: CheckinIn, db: AsyncSession = Depends(get_db)):
-    """Check-in team using scanned QR code + typed unique access key."""
-    try:
-        # Parse QR data (contains team_id and access_key)
-        import json
-        qr_data = json.loads(payload.qr_data)
-        team_id = qr_data.get("team_id")
-        qr_access_key = qr_data.get("access_key")
-        
-        if not team_id or not qr_access_key:
-            raise HTTPException(status_code=400, detail="Invalid QR code data")
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="Invalid QR code format")
-    
-    # Find team by QR data
-    q = await db.execute(select(Team).where(Team.team_id == team_id, Team.access_key == qr_access_key))
-    team = q.scalars().first()
-    if not team:
-        raise HTTPException(status_code=404, detail="❌ Team not found")
-    
-    # Verify typed access key matches
-    if team.access_key != payload.access_key:
-        raise HTTPException(status_code=400, detail="❌ Invalid access key")
-    
-    # Already checked in?
-    if team.attendance_status:
-        raise HTTPException(status_code=400, detail="⚠️ Team already checked in")
-    
-    # Mark attendance
-    team.checkin_time = datetime.utcnow()
-    team.attendance_status = True
-    await db.commit()
-    
-    return {"message": f"✅ {team.team_name} checked in successfully", "team_id": team_id}
+async def checkin(db: AsyncSession = Depends(get_db)):
+    """Endpoint retained for compatibility but check-in is disabled."""
+    raise HTTPException(status_code=410, detail="Check-in feature is disabled")
 
 
 @router.post("/attendance/scan")
-async def scan_attendance_qr(payload: AttendanceQRIn, db: AsyncSession = Depends(get_db)):
+async def scan_attendance_qr(db: AsyncSession = Depends(get_db)):
     """
-    Scan attendance QR code (JSON) and mark team attendance.
+    **Check-in disabled**
 
-    Expected QR JSON: {"team_id": "HACKCSM-001", "access_key": "..."}
+    This endpoint no longer performs any scanning or attendance updates.
+    All attempts receive a 410 response.
     """
-    try:
-        # Use the QRScanner's tolerant parser so small formatting differences
-        # (single quotes, nested payloads, alternative key names) are accepted.
-        scanner = get_qr_scanner()
-        try:
-            qr_data = scanner.parse_qr_data(payload.qr_data.strip())
-        except InvalidQRDataError as e:
-            logger.error(f"Invalid QR data: {e}")
-            raise HTTPException(status_code=400, detail=f"❌ Invalid QR code: {str(e)}")
-
-        team_id = qr_data.get("team_id")
-        access_key = qr_data.get("access_key")
-
-        if not team_id or not access_key:
-            raise HTTPException(status_code=400, detail="❌ Invalid QR code: missing team_id or access_key")
-
-        # Query DB for team with matching team_id & access_key
-        team_q = await db.execute(select(Team).where(Team.team_id == team_id, Team.access_key == access_key))
-        team = team_q.scalars().first()
-
-        if not team:
-            logger.warning(f"Invalid QR or team not found: {team_id}")
-            raise HTTPException(status_code=404, detail="❌ Invalid QR or team not found")
-
-        if team.attendance_status:
-            return {"status": "already_present", "message": "Already marked present", "team_id": team.team_id}
-
-        team.attendance_status = True
-        if not team.checkin_time:
-            team.checkin_time = datetime.utcnow()
-
-        await db.commit()
-
-        return {
-            "status": "success",
-            "message": f"✅ {team.team_name} checked in successfully",
-            "team_id": team.team_id,
-            "team_name": team.team_name,
-            "attendance_status": True,
-            "checkin_time": team.checkin_time.isoformat() if team.checkin_time else None
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("❌ Error scanning QR code")
-        raise HTTPException(status_code=400, detail=str(e))
+    raise HTTPException(status_code=410, detail="Check-in feature is disabled")
 
 
 
 @router.post("/attendance/scan-file")
 async def scan_attendance_file(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
     """
-    Accept an uploaded image file, decode QR, validate in DB, and update attendance.
+    **Check-in disabled**
+
+    Attendance image scanning is not available. Requests will be rejected.
     """
-    try:
-        # Read file bytes
-        content = await file.read()
-        filename = file.filename or "uploaded_image"
-        content_type = file.content_type or "application/octet-stream"
-
-        logger.info(f"📥 Received file for QR scanning: {filename} ({content_type})")
-
-        # Scan the image for QR data
-        scanner = get_qr_scanner()
-        try:
-            qr_data = await scanner.scan_file(content, filename, content_type)
-        except InvalidImageError as ie:
-            logger.warning(f"Invalid image: {ie}")
-            raise HTTPException(status_code=400, detail=str(ie))
-        except QRNotDetectedError as qe:
-            logger.warning(f"QR not detected: {qe}")
-            raise HTTPException(status_code=404, detail=str(qe))
-        except InvalidQRDataError as qe:
-            logger.warning(f"Invalid QR data: {qe}")
-            raise HTTPException(status_code=400, detail=str(qe))
-
-        team_id = qr_data.get("team_id")
-        access_key = qr_data.get("access_key")
-
-        if not team_id or not access_key:
-            logger.error("Missing team_id or access_key in QR data")
-            raise HTTPException(status_code=400, detail="Invalid QR data: missing team_id or access_key")
-
-        # Validate team in database
-        q = await db.execute(select(Team).where(Team.team_id == team_id, Team.access_key == access_key))
-        team = q.scalars().first()
-
-        if not team:
-            logger.warning(f"Team not found for id: {team_id}")
-            raise HTTPException(status_code=404, detail=f"Team {team_id} not found or invalid access_key")
-
-        # Update attendance
-        team.attendance_status = True
-        if not team.checkin_time:
-            team.checkin_time = datetime.utcnow()
-
-        await db.commit()
-        await db.refresh(team)
-
-        logger.info(f"✅ Attendance updated for participant {participant_name} ({participant_id}) in team {team.team_name}")
-
-        return {
-            "status": "success",
-            "message": f"Attendance marked for {team.team_name}",
-            "team_id": team.team_id,
-            "attendance_status": True,
-            "checkin_time": team.checkin_time.isoformat() if team.checkin_time else None
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"❌ Unexpected error in scan_attendance_file: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error while processing QR image")
+    raise HTTPException(status_code=410, detail="Check-in feature is disabled")
 
 
 @router.post("/attendance/scan-member")
-async def scan_member_attendance(payload: AttendanceQRIn, db: AsyncSession = Depends(get_db)):
+async def scan_member_attendance(db: AsyncSession = Depends(get_db)):
     """
-    Member-level attendance scanning endpoint.
-    
-    Scans QR code with payload: {"team_id": "HACKCSM-001", "member_id": "<UUID>", "access_key": "..."}
-    
-    Each team member has unique member_id and access_key.
-    Marks that specific member as present.
-    
-    Returns:
-        - success: Member marked present
-        - already_present: Member already checked in
-        - error: Invalid QR or member not found
+    **Member check-in disabled**
+
+    This endpoint is disabled; attendance logic removed.
     """
-    try:
-        # Parse QR JSON payload
-        qr_data_str = payload.qr_data.strip()
-        logger.info(f"📱 Scanning member QR code")
-        
-        try:
-            qr_data = json.loads(qr_data_str)
-        except json.JSONDecodeError:
-            logger.error("Invalid JSON in member QR code")
-            raise HTTPException(status_code=400, detail="❌ Invalid QR code format")
-        
-        team_id = qr_data.get("team_id")
-        member_id = qr_data.get("member_id")
-        member_access_key = qr_data.get("access_key")
-        
-        if not all([team_id, member_id, member_access_key]):
-            raise HTTPException(
-                status_code=400,
-                detail="❌ Invalid member QR code: missing team_id, member_id, or access_key"
-            )
-        
-        # Use attendance helper to mark member present
-        result = await mark_attendance_from_qr(
-            team_id=team_id,
-            member_id=member_id,
-            access_key=member_access_key,
-            db=db
-        )
-        
-        logger.info(f"✅ Member attendance result: {result['status']}")
-        
-        return result
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"❌ Error in scan_member_attendance: {e}")
-        raise HTTPException(status_code=500, detail=f"Error processing member attendance: {str(e)}")
+    raise HTTPException(status_code=410, detail="Member check-in disabled")
 
 
 @router.post("/attendance/scan-member-file")
 async def scan_member_attendance_file(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
     """
-    Accept uploaded image file, decode member-level QR, validate, and mark member present.
+    **Member check-in disabled**
+
+    File-based member scan is no longer supported.
     """
-    try:
-        # Read file bytes
-        content = await file.read()
-        filename = file.filename or "member_qr_image"
-        
-        logger.info(f"📥 Received image file for member QR scanning: {filename}")
-        
-        # Scan the image for QR data
-        scanner = get_qr_scanner()
-        try:
-            qr_data = await scanner.scan_file(content, filename, file.content_type or "image/jpeg")
-        except InvalidImageError as ie:
-            logger.warning(f"Invalid image: {ie}")
-            raise HTTPException(status_code=400, detail=str(ie))
-        except QRNotDetectedError as qe:
-            logger.warning(f"QR not detected: {qe}")
-            raise HTTPException(status_code=404, detail=str(qe))
-        except InvalidQRDataError as qe:
-            logger.warning(f"Invalid QR data: {qe}")
-            raise HTTPException(status_code=400, detail=str(qe))
-        
-        team_id = qr_data.get("team_id")
-        member_id = qr_data.get("member_id")
-        member_access_key = qr_data.get("access_key")
-        
-        if not all([team_id, member_id, member_access_key]):
-            logger.error("Missing required fields in member QR data")
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid member QR data: missing team_id, member_id, or access_key"
-            )
-        
-        # Use attendance helper to mark member present
-        result = await mark_attendance_from_qr(
-            team_id=team_id,
-            member_id=member_id,
-            access_key=member_access_key,
-            db=db
-        )
-        
-        logger.info(f"✅ Member attendance from file: {result['status']}")
-        
-        return result
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"❌ Error in scan_member_attendance_file: {e}")
-        raise HTTPException(status_code=500, detail=f"Error processing member QR file: {str(e)}")
+    raise HTTPException(status_code=410, detail="Member check-in disabled")
 
 
 @router.get("/team/{team_id}")

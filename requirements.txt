@@ -6,7 +6,6 @@ psycopg2-binary
 python-dotenv
 passlib[bcrypt]
 pyjwt
-qrcode[pil]
 reportlab
 Pillow
 python-multipart
@@ -14,6 +13,4 @@ pydantic[email]
 pydantic-settings
 aiosmtplib
 gunicorn
-opencv-python
-pyzbar
 numpy

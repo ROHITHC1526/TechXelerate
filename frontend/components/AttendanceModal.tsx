@@ -38,53 +38,35 @@ export default function AttendanceModal({ isOpen, teamDetails, onClose }: Attend
 
         {/* Team Details Card */}
         <div className="space-y-6 mb-8">
-          {/* Participant Info */}
-          {teamDetails.participant && (
-            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
-              <p className="text-green-300 text-xs font-mono font-bold mb-1">👤 PARTICIPANT</p>
-              <p className="text-white font-bold text-lg">{teamDetails.participant}</p>
-              {teamDetails.role && (
-                <p className="text-green-400 text-sm font-mono mt-1">Role: {teamDetails.role}</p>
-              )}
-            </div>
-          )}
-
           {/* Team Information */}
-          <div className="space-y-4 bg-gray-800/50 rounded-lg p-5 border border-gray-700">
-            <div>
-              <p className="text-cyan-300 text-xs font-mono font-bold mb-1">🏆 TEAM ID</p>
-              <p className="text-white font-mono font-bold text-lg tracking-wide">{teamDetails.team_id}</p>
-            </div>
-
-            <div className="border-t border-gray-700 pt-4">
-              <p className="text-cyan-300 text-xs font-mono font-bold mb-1">📋 TEAM NAME</p>
-              <p className="text-white font-bold text-lg">{teamDetails.team_name}</p>
-            </div>
-
-            <div className="border-t border-gray-700 pt-4">
-              <p className="text-cyan-300 text-xs font-mono font-bold mb-1">👨‍💼 TEAM LEAD</p>
-              <p className="text-white font-bold text-lg">{teamDetails.leader_name}</p>
-            </div>
-
-            <div className="border-t border-gray-700 pt-4">
-              <p className="text-cyan-300 text-xs font-mono font-bold mb-1">🎯 DOMAIN/TRACK</p>
-              <p className="text-purple-300 font-bold text-lg">{teamDetails.domain}</p>
-            </div>
-
-            {memberCount > 0 && (
-              <div className="border-t border-gray-700 pt-4">
-                <p className="text-cyan-300 text-xs font-mono font-bold mb-1">👥 TEAM MEMBERS</p>
-                <p className="text-white font-bold text-lg">{memberCount} Member{memberCount !== 1 ? 's' : ''}</p>
-              </div>
+          <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 space-y-2">
+            <p className="text-cyan-300 text-xs font-mono font-bold">🏆 TEAM ID</p>
+            <p className="text-white font-mono font-bold text-lg tracking-wide">{teamDetails.team_id}</p>
+            {teamDetails.team_name && (
+              <>
+                <p className="text-cyan-300 text-xs font-mono font-bold">📋 TEAM NAME</p>
+                <p className="text-white font-bold text-lg">{teamDetails.team_name}</p>
+              </>
             )}
-
+            {teamDetails.leader_name && (
+              <>
+                <p className="text-cyan-300 text-xs font-mono font-bold">👨‍💼 TEAM LEAD</p>
+                <p className="text-white font-bold text-lg">{teamDetails.leader_name}</p>
+              </>
+            )}
+            {teamDetails.domain && (
+              <>
+                <p className="text-cyan-300 text-xs font-mono font-bold">🎯 DOMAIN/TRACK</p>
+                <p className="text-white font-bold text-lg">{teamDetails.domain}</p>
+              </>
+            )}
             {teamDetails.checkin_time && (
-              <div className="border-t border-gray-700 pt-4">
-                <p className="text-cyan-300 text-xs font-mono font-bold mb-1">⏰ CHECK-IN TIME</p>
-                <p className="text-white font-mono text-sm">
+              <>
+                <p className="text-cyan-300 text-xs font-mono font-bold">⏰ CHECK-IN TIME</p>
+                <p className="text-white font-mono text-lg">
                   {new Date(teamDetails.checkin_time).toLocaleString()}
                 </p>
-              </div>
+              </>
             )}
           </div>
         </div>

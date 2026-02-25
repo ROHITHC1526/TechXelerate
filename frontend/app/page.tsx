@@ -124,7 +124,7 @@ export default function Home() {
           <motion.div variants={itemVariants}>
             <div className="text-center mb-8">
             <div className="inline-block px-4 py-2 rounded-full border border-cyan-500/50 bg-cyan-500/10 backdrop-blur-sm mb-6">
-              <span className="text-cyan-400 font-mono text-sm">✨ CSE AI & ML CONFERENCE 2026</span>
+              <span className="text-cyan-400 font-mono text-sm">✨ TechXelarate2026</span>
             </div>
             </div>
           </motion.div>

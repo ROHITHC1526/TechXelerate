@@ -16,6 +16,24 @@ API endpoints are under `/api`.
 
 ---
 
+## Simplified Mode
+
+The application can be run in a reduced configuration where
+attendance scanning, QR code generation, and ID card creation are disabled.
+This is useful for testing or when the team only requires registration
+confirmation emails without attachments.
+
+- `/api/attendance/scan` and related endpoints return **410 Gone**.
+- OTP verification still creates teams and members but does **not** generate
+  any PDF/PNG assets.
+- Confirmation emails contain the same textual details as before but no
+  attachments.
+
+To re-enable the full feature set, revert the changes in
+`app/verify_otp_service.py`, `app/routes.py`, and `app/email_service.py`.
+
+---
+
 ## Troubleshooting
 
 ### "Email already registered" but database looks empty

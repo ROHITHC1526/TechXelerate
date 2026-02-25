@@ -32,8 +32,7 @@ from app.otp_manager import (
     store_otp
 )
 from app.email_service import EmailService
-from app.idcard_service import IDCardService
-from app.team_creation_service import create_team_and_members, generate_member_qr_codes
+from app.team_creation_service import create_team_and_members
 
 logger = logging.getLogger(__name__)
 
@@ -90,53 +89,15 @@ def increment_otp_attempts(email: str):
         _otp_attempts[email] = (1, reset_time)
 
 
+# ID card generation disabled per user request; no PDF or PNG
+# The function remains only so callers that may reference it still work.
 async def generate_id_cards_async(
     team_id: str,
     team_members_list: list,
     team_data: dict
 ) -> Optional[tuple]:
-    """
-    Asynchronously generate ID cards PDF.
-    
-    Args:
-        team_id: Team ID
-        team_members_list: List of team members with their access_keys
-        team_data: Team information
-        member_qr_codes: Optional list of member QR code dictionaries with qr_path
-        
-    Returns:
-        Path to generated PDF or None on error
-    """
-    try:
-        logger.info(f"📱 Starting async ID card generation for team {team_id}")
-        
-        service = IDCardService(output_dir=settings.ASSETS_DIR)
-        # generate PDF containing all member cards
-        pdf_path = service.generate_pdf(
-            team_data=team_data,
-            team_members=team_members_list,
-            output_filename=f"{team_id}_id_cards.pdf"
-        )
-        logger.info(f"✅ ID cards PDF generated: {pdf_path}")
-        
-        # also export individual PNG cards per member
-        png_paths = []
-        for idx, member in enumerate(team_members_list):
-            try:
-                card_img = service.create_card_image(team_data, member, idx)
-                filename = f"{team_id}_{member.get('member_id', idx)}_card.png"
-                outpath = os.path.join(settings.ASSETS_DIR, filename)
-                card_img.save(outpath, 'PNG')
-                png_paths.append(outpath)
-                logger.info("ID card generated for member %s at %s", member.get('name'), outpath)
-            except Exception as e:
-                logger.error("❌ Failed to create PNG card for %s: %s", member.get('name'), e)
-        
-        return pdf_path, png_paths
-        
-    except Exception as e:
-        logger.error(f"❌ Failed to generate ID cards: {e}")
-        return None
+    logger.info("⚠️ ID card generation skipped (feature disabled)")
+    return None
 
 
 async def send_email_async(
@@ -383,14 +344,8 @@ async def verify_otp_endpoint(
             members = team_result["members"]
             logger.info(f"✅ Team {team_id} created with {team_result['member_count']} members")
             
-            # Generate QR codes for each member
-            qr_codes = await generate_member_qr_codes(
-                team_id=team_id,
-                members=members,
-                out_dir="assets"
-            )
-            logger.info(f"✅ Generated {len(qr_codes)} member QR codes")
-            
+            # QR generation and ID cards are disabled per request.
+        
         except IntegrityError as e:
             await db.rollback()
             logger.error(f"❌ Database integrity error: {e}")
@@ -408,53 +363,14 @@ async def verify_otp_endpoint(
                 detail=f"Failed to create team. Please try again."
             )
         
-        # ============================================================
-        # STEP 11: Generate ID Cards with individual QR codes
-        # ============================================================
-        team_data = {
-            'team_id': team_id,
-            'team_name': reg_data.get("team_name"),
-            'college_name': reg_data.get("college_name"),
-            'domain': reg_data.get("domain")
-        }
-
-        result = await generate_id_cards_async(
-            team_id=team_id,
-            team_members_list=members,
-            team_data=team_data
-        )
-        # result is tuple (pdf_path, png_list)
-        pdf_path, png_list = result if isinstance(result, tuple) else (result, [])
-        
-        if not pdf_path:
-            logger.error(f"❌ ID card generation failed")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to generate ID cards. Please contact support."
-            )
-        
-        # log paths for debugging
-        for p in png_list:
-            logger.debug(f"Individual ID card saved: {p}")
-        
-        # ============================================================
-        # STEP 12: Send Email with PDF Attachment
-        # ============================================================
-        email_sent = await send_email_async(
+        # STEP 11 & 12: Confirmation email only (no attachments)
+        EmailService.send_registration_confirmation(
             to_email=reg_data.get("leader_email"),
-            team_id=team_id,
+            leader_name=reg_data.get("leader_name"),
             team_name=reg_data.get("team_name"),
-            leader_name=members[0]["name"],  # First member is team leader
-            pdf_path=pdf_path,
-            domain=reg_data.get("domain", "General")
+            team_id=team_id,
+            pdf_path=None
         )
-        
-        if not email_sent:
-            logger.error(f"❌ Email sending failed")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="ID cards generated but email delivery failed. Please check SMTP settings."
-            )
         
         # ============================================================
         # STEP 13: Clean Up Temporary Data

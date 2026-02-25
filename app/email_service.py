@@ -27,15 +27,16 @@ class EmailService:
     @staticmethod
     def send_registration_confirmation(to_email: str, leader_name: str, team_name: str, team_id: str, pdf_path: str = None) -> bool:
         """
-        Send registration confirmation email after team registered with photos.
+        Send simple registration confirmation email after team registered.
+        Attachments (PDF/PNG) are disabled; only text/HTML content is sent.
         
         Args:
             to_email: Recipient email address
             leader_name: Team leader name
             team_name: Team name
             team_id: Team unique identifier
-            pdf_path: Optional path to PDF attachment (ID cards)
-            
+            pdf_path: Ignored (legacy parameter)
+        
         Returns:
             True if email sent successfully, False otherwise
         """
@@ -49,7 +50,7 @@ class EmailService:
             message = EmailMessage()
             message["From"] = settings.SMTP_USER
             message["To"] = to_email
-            message["Subject"] = "✅ TechXelarate - Registration Confirmed! 🎉 ID Cards Attached"
+            message["Subject"] = "✅ TechXelarate - Registration Confirmed!"
             
             plain_body = f"""
 TechXelarate 2026 - Registration Confirmed!
@@ -61,9 +62,8 @@ Congratulations! Your team '{team_name}' has been successfully registered for Te
 Your Team ID: {team_id}
 
 ✅ What's Next:
-1. You should see professional ID cards PDF attached to this email with unique QR codes
-2. Print the ID cards or save them for the event
-3. Keep your Team ID safe - you'll need it for check-in at the event
+1. Save this Team ID for event check-in
+2. Share it with your team members
 
 🎉 We're excited to see your innovative ideas come to life!
 
@@ -96,13 +96,10 @@ TechXelarate Team
                 <strong style="color: #00e8ff;">TechXelarate 2026</strong>.
             </p>
             
-            <!-- Team ID Card -->
+            <!-- Team ID Block -->
             <div style="background: linear-gradient(90deg, rgba(0,255,136,0.2) 0%, rgba(0,232,255,0.1) 100%); 
                         border: 3px solid #00ff88; padding: 20px; border-radius: 10px; 
                         margin: 25px 0; text-align: center;">
-                <p style="color: #a0a0a0; margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">
-                    Your Team ID
-                </p>
                 <div style="font-size: 32px; font-weight: bold; color: #00ff88; font-family: 'Courier New', monospace; 
                             background: rgba(0,255,136,0.1); padding: 15px; border-radius: 8px; margin: 10px 0;">
                     {team_id}
@@ -110,45 +107,6 @@ TechXelarate Team
                 <p style="color: #ffaa00; margin: 8px 0 0 0; font-size: 12px; font-weight: bold;">
                     💾 Save this Team ID - you'll need it for event check-in!
                 </p>
-            </div>
-            
-            <!-- What's Next -->
-            <div style="background: rgba(200,0,255,0.1); border-left: 5px solid #c800ff; padding: 20px; 
-                        border-radius: 8px; margin: 25px 0;">
-                <h3 style="color: #c800ff; margin: 0 0 12px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">
-                    ✅ What's Next
-                </h3>
-                <ol style="color: #d0d0d0; margin: 0; padding-left: 20px; line-height: 1.8; font-size: 14px;">
-                    <li style="margin: 8px 0;">📎 Your professional ID cards PDF is <strong>attached to this email</strong></li>
-                    <li style="margin: 8px 0;">🖨️ Print or save the ID cards for the event</li>
-                    <li style="margin: 8px 0;">🔖 Each card has a unique QR code for attendance tracking</li>
-                    <li style="margin: 8px 0;">Keep your Team ID safe for event check-in</li>
-                    <li style="margin: 8px 0;">🚀 Great innovation! See you at the event!</li>
-                </ol>
-            </div>
-            
-            <!-- Status -->
-            <div style="background: linear-gradient(90deg, rgba(0,232,255,0.2) 0%, rgba(0,255,136,0.2) 100%); 
-                        border: 2px solid #00e8ff; border-radius: 8px; padding: 20px; margin: 25px 0;">
-                <h3 style="color: #00e8ff; margin: 0 0 12px 0;">📋 Registration Status</h3>
-                <table style="width: 100%; color: #d0d0d0; font-size: 14px;">
-                    <tr style="border-bottom: 1px solid #00e8ff; opacity: 0.6;">
-                        <td style="padding: 8px 0;">✅ Team Registered</td>
-                        <td style="padding: 8px 0; text-align: right; color: #00ff88;">Complete</td>
-                    </tr>
-                    <tr style="border-bottom: 1px solid #00e8ff; opacity: 0.6;">
-                        <td style="padding: 8px 0;">✅ Email Verified</td>
-                        <td style="padding: 8px 0; text-align: right; color: #00ff88;">Complete</td>
-                    </tr>
-                    <tr style="border-bottom: 1px solid #00e8ff; opacity: 0.6;">
-                        <td style="padding: 8px 0;">✅ ID Cards Generated</td>
-                        <td style="padding: 8px 0; text-align: right; color: #00ff88;">Complete</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 8px 0;">🎉 Event Ready</td>
-                        <td style="padding: 8px 0; text-align: right; color: #c800ff;">Prepared</td>
-                    </tr>
-                </table>
             </div>
             
             <!-- Footer -->
@@ -170,39 +128,7 @@ TechXelarate Team
             message.set_content(plain_body)
             message.add_alternative(html_body, subtype="html")
             
-            # Attach PDF if provided
-            if pdf_path and os.path.exists(pdf_path):
-                try:
-                    with open(pdf_path, 'rb') as attachment:
-                        message.add_attachment(
-                            attachment.read(),
-                            maintype='application',
-                            subtype='pdf',
-                            filename=os.path.basename(pdf_path)
-                        )
-                    logger.info(f"📎 Attached PDF: {os.path.basename(pdf_path)}")
-                except Exception as e:
-                    logger.warning(f"⚠️ Failed to attach PDF: {e}")
-            
-            # Also attach individual PNG cards for this team if they exist
-            try:
-                team_prefix = f"{team_id}_"
-                for fname in os.listdir(settings.ASSETS_DIR):
-                    if fname.startswith(team_prefix) and fname.endswith("_card.png"):
-                        fullpath = os.path.join(settings.ASSETS_DIR, fname)
-                        try:
-                            with open(fullpath, 'rb') as attachment:
-                                message.add_attachment(
-                                    attachment.read(),
-                                    maintype='image',
-                                    subtype='png',
-                                    filename=fname
-                                )
-                            logger.info(f"📎 Attached PNG card: {fname}")
-                        except Exception as e:
-                            logger.warning(f"⚠️ Failed to attach PNG {fname}: {e}")
-            except Exception as e:
-                logger.debug(f"No individual PNG cards to attach or error scanning assets: {e}")
+            # no attachments
             
             # Send email
             logger.info(f"🔌 Connecting to SMTP: {settings.SMTP_HOST}:{settings.SMTP_PORT}")

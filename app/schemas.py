@@ -87,32 +87,11 @@ class DownloadIDIn(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
 
-class CheckinIn(BaseModel):
-    """Schema for QR code check-in at event."""
-    qr_data: str = Field(..., description="Scanned QR code data (team_id + access_key)")
-    access_key: str = Field(..., description="Typed unique access key from ID card")
-    
-    model_config = ConfigDict(str_strip_whitespace=True)
+# deprecated: QR based checkin removed
 
 
-class AttendanceQRIn(BaseModel):
-    """Schema for scanning attendance QR codes from ID cards."""
-    qr_data: str = Field(..., description="Scanned attendance QR code JSON data")
-    
-    model_config = ConfigDict(str_strip_whitespace=True)
-    
-    @field_validator('qr_data', mode='before')
-    @classmethod
-    def validate_qr_data(cls, v):
-        if not isinstance(v, str):
-            raise ValueError('QR data must be a string')
-        # Try to parse as JSON to ensure it's valid
-        import json
-        try:
-            json.loads(v)
-        except json.JSONDecodeError:
-            raise ValueError('QR data must be valid JSON')
-        return v
+
+# manual attendance check-in schema removed (feature disabled)
 
 
 class TestEmailIn(BaseModel):

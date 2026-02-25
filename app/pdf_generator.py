@@ -11,13 +11,12 @@ Features:
 - Participant photo with premium borders
 - Unique centered Hackathon ID
 - Random motivational quote per participant
-- QR code with participant ID
 - High-resolution PDF export
 """
 
 import os
 import logging
-import qrcode
+# the QR library has been removed; ID cards no longer include codes
 from io import BytesIO
 from datetime import datetime
 from pathlib import Path
@@ -135,7 +134,7 @@ class IDCardGenerator:
         - Upper: TechXelarate branding
         - Middle: Participant photo with premium frame
         - Lower: Participant info
-        - Bottom: QR code + minimal design
+        - Bottom: decorative status text ("Verified Participant") instead of QR
         """
         try:
             logger.info(f"📱 Generating ID card for {member.get('name', 'Member')}")
@@ -150,56 +149,68 @@ class IDCardGenerator:
             self._add_participant_photo(img, member)
             self._draw_participant_info(img, member, team_data)
             self._draw_quote(img, member)
-            self._add_qr_code(img, team_data, member, member_idx)
+            # Instead of QR we add a status line and decorative bubbles
+            self._add_status_section(img)
             
             # Save card image
             output_filename = f"id_card_{team_data.get('team_id', 'unknown')}_{member_idx}.png"
             output_path = os.path.join(self.output_dir, output_filename)
             img.save(output_path, 'PNG', quality=95)
-            
             logger.info(f"✅ Card image saved: {output_path}")
             return output_path
-            
+        
         except Exception as e:
             logger.exception(f"❌ Error creating card: {e}")
             return None
     
+    def _add_status_section(self, img: PILImage.Image):
+        """Draw status text with minimal decorative accents."""
+        draw = ImageDraw.Draw(img)
+        width, height = img.size
+        y_pos = height - 300
+        try:
+            info_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 28)
+        except Exception:
+            info_font = ImageFont.load_default()
+        # status text in dark blue
+        draw.text((width//2, y_pos), "Verified Participant", fill=(30, 100, 150), font=info_font, anchor="mm")
+        # minimal subtle dots instead of bubbles
+        import random
+        random.seed(42)
+        for _ in range(5):
+            rx = random.randint(100, width - 100)
+            ry = random.randint(y_pos + 50, y_pos + 180)
+            rsize = random.randint(8, 20)
+            draw.ellipse([rx, ry, rx + rsize, ry + rsize], outline=(180, 210, 240), width=1)
+    
     def _create_gradient_background(self) -> PILImage.Image:
-        """Create futuristic gradient background (dark navy to deep purple with neon accents)."""
-        img = PILImage.new('RGB', (self.card_width_px, self.card_height_px), (10, 15, 40))
-        
-        # Create gradient from top (dark) to bottom (slightly lighter)
-        pixels = img.load()
+        """Create minimal light background with soft gradient from white to light blue."""
+        img = PILImage.new('RGB', (self.card_width_px, self.card_height_px))
+        draw = ImageDraw.Draw(img)
+        # soft white to light blue gradient (top to bottom)
         for y in range(self.card_height_px):
-            # Gradient progression
-            ratio = y / self.card_height_px
-            r = int(10 + 20 * ratio)     # 10 -> 30
-            g = int(15 + 25 * ratio)     # 15 -> 40
-            b = int(40 + 30 * ratio)     # 40 -> 70
-            
-            for x in range(self.card_width_px):
-                pixels[x, y] = (r, g, b)
+            t = y / self.card_height_px
+            # Start: nearly white (245, 248, 250)
+            # End: soft light blue (225, 240, 250)
+            r = int(245 - t * 20)  
+            g = int(248 - t * 8)   
+            b = int(250 - t * 0)   
+            draw.line([(0, y), (self.card_width_px, y)], fill=(r, g, b))
         
-        # Add neon left stripe (cyan to pink gradient)
-        draw = ImageDraw.Draw(img, 'RGBA')
-        stripe_width = 8
-        for x in range(stripe_width):
-            for y in range(self.card_height_px):
-                ratio = y / self.card_height_px
-                intensity = int(150 + 105 * ratio)
-                
-                # Cyan to pink
-                if y < self.card_height_px / 2:
-                    color = (0, 200 + int(55 * ratio), 255, 200)
-                else:
-                    color = (255, 100 - int(50 * ratio), 200 + int(55 * ratio), 200)
-                
-                draw.point((x, y), fill=color)
+        # minimal accent: subtle light gray lines (not dark)
+        import random
+        random.seed(42)  # reproducible pattern
+        for _ in range(8):
+            x1 = random.randint(0, self.card_width_px)
+            y1 = random.randint(0, self.card_height_px // 3)
+            x2 = random.randint(0, self.card_width_px)
+            y2 = random.randint(0, self.card_height_px // 3)
+            draw.line([(x1, y1), (x2, y2)], fill=(220, 230, 240), width=1)
         
         return img
     
     def _draw_header(self, img: PILImage.Image, text: str):
-        """Draw LBRCE header with cyan glow effect."""
+        """Draw LBRCE header with soft blue accent."""
         draw = ImageDraw.Draw(img, 'RGBA')
         
         try:
@@ -210,20 +221,14 @@ class IDCardGenerator:
         # Get text dimensions
         bbox = draw.textbbox((0, 0), text, font=font)
         text_width = bbox[2] - bbox[0]
-        text_height = bbox[3] - bbox[1]
-        
         x = (self.card_width_px - text_width) // 2
         y = 40
         
-        # Glow layers (cyan)
-        for glow in [8, 6, 4, 2]:
-            draw.text((x + glow, y), text, fill=(0, 180, 200, 80), font=font)
-        
-        # Main text (bright cyan)
-        draw.text((x, y), text, fill=(0, 255, 255, 255), font=font)
+        # Main text in dark blue (not bright cyan)
+        draw.text((x, y), text, fill=(30, 100, 150, 255), font=font)
     
     def _draw_subheader(self, img: PILImage.Image, text: str):
-        """Draw college name subtitle."""
+        """Draw college name subtitle in soft gray."""
         draw = ImageDraw.Draw(img, 'RGBA')
         
         try:
@@ -235,12 +240,12 @@ class IDCardGenerator:
         text_width = bbox[2] - bbox[0]
         x = (self.card_width_px - text_width) // 2
         
-        # Light blue/silver text
-        draw.text((x, 110), text, fill=(200, 220, 240, 200), font=font)
+        # Soft gray text
+        draw.text((x, 110), text, fill=(100, 120, 140, 200), font=font)
         
-        # Divider line
+        # Divider line (light blue)
         draw.line([(80, 145), (self.card_width_px - 80, 145)], 
-                 fill=(0, 200, 255, 150), width=2)
+                 fill=(180, 210, 240, 200), width=2)
     
     def _draw_tech_branding(self, img: PILImage.Image):
         """Draw TechXelarate branding with golden text."""
@@ -378,53 +383,53 @@ class IDCardGenerator:
             x_code = (self.card_width_px - code_width) // 2
             draw.text((x_code, y_pos - 40), code_text, fill=(255, 170, 0, 200), font=code_font)
         
-        # Participant Name (prominent, centered, bold)
+        # Participant Name (prominent, centered, dark blue)
         name = member.get('name', 'Unknown')
         bbox = draw.textbbox((0, 0), name, font=name_font)
         name_width = bbox[2] - bbox[0]
         x = (self.card_width_px - name_width) // 2
-        draw.text((x, y_pos), name, fill=(255, 200, 0, 255), font=name_font)
+        draw.text((x, y_pos), name, fill=(30, 100, 150, 255), font=name_font)
         
         y_pos += 60
         
-        # Team Name
+        # Team Name in soft blue
         team_name = team_data.get('team_name', 'Team')
         bbox = draw.textbbox((0, 0), team_name, font=info_font)
         team_width = bbox[2] - bbox[0]
         x_team = (self.card_width_px - team_width) // 2
-        draw.text((x_team, y_pos), f"Team: {team_name}", fill=(0, 255, 200, 200), font=info_font)
+        draw.text((x_team, y_pos), f"Team: {team_name}", fill=(80, 130, 180, 200), font=info_font)
         
         y_pos += 45
         
-        # Hackathon ID (centered and bold)
+        # Hackathon ID (centered and bold, dark blue)
         team_id = team_data.get('team_id', 'HACK-000')
         bbox = draw.textbbox((0, 0), team_id, font=name_font)
         team_id_width = bbox[2] - bbox[0]
         x_id = (self.card_width_px - team_id_width) // 2
         
-        # ID background box
+        # ID background box with light blue outline
         draw.rectangle(
             [(x_id - 15, y_pos - 5), (x_id + team_id_width + 15, y_pos + 50)],
-            outline=(0, 255, 200, 150),
-            width=3
+            outline=(150, 190, 230, 150),
+            width=2
         )
-        draw.text((x_id, y_pos), team_id, fill=(0, 255, 200, 255), font=name_font)
+        draw.text((x_id, y_pos), team_id, fill=(30, 100, 150, 255), font=name_font)
         
         y_pos += 65
         
-        # Domain and Year
+        # Domain and Year in soft gray
         domain = team_data.get('domain', 'Domain')
         year = team_data.get('year', 'Year')
         info_text = f"{domain} | {year}"
         bbox = draw.textbbox((0, 0), info_text, font=label_font)
         info_width = bbox[2] - bbox[0]
         x_info = (self.card_width_px - info_width) // 2
-        draw.text((x_info, y_pos), info_text, fill=(150, 200, 255, 180), font=label_font)
+        draw.text((x_info, y_pos), info_text, fill=(100, 130, 160, 180), font=label_font)
         
         logger.info(f"✅ Added info for {name}")
     
     def _draw_quote(self, img: PILImage.Image, member: dict):
-        """Draw random motivational quote."""
+        """Draw random motivational quote in soft gray."""
         try:
             draw = ImageDraw.Draw(img, 'RGBA')
             
@@ -444,59 +449,9 @@ class IDCardGenerator:
             bbox = draw.textbbox((0, 0), line, font=quote_font)
             line_width = bbox[2] - bbox[0]
             x = (self.card_width_px - line_width) // 2
-            draw.text((x, y_pos), f'"{line}"', fill=(150, 255, 200, 150), font=quote_font)
+            draw.text((x, y_pos), f'"{line}"', fill=(120, 150, 180, 140), font=quote_font)
             y_pos += 25
     
-    def _add_qr_code(self, img: PILImage.Image, team_data: dict, member: dict, member_idx: int):
-        """Generate and add QR code with team code and participant information."""
-        try:
-            # Create QR payload containing only team_id and access_key
-            import json
-            team_id_val = team_data.get('team_id')
-            access_key_val = team_data.get('access_key')
-            qr_payload = {"team_id": team_id_val, "access_key": access_key_val}
-            qr_data = json.dumps(qr_payload, separators=(',', ':'))
-            
-            # Generate QR code
-            qr = qrcode.QRCode(
-                version=1,
-                error_correction=qrcode.constants.ERROR_CORRECT_H,
-                box_size=8,
-                border=2,
-            )
-            qr.add_data(qr_data)
-            qr.make(fit=True)
-            
-            qr_img = qr.make_image(fill_color="black", back_color="transparent")
-            qr_img = qr_img.convert('RGBA')
-            
-            # Resize QR code for placement
-            qr_size = 200
-            qr_img = qr_img.resize((qr_size, qr_size), PILImage.Resampling.LANCZOS)
-            
-            # Place QR code at bottom center
-            qr_x = (self.card_width_px - qr_size) // 2
-            qr_y = 1450
-            
-            img.paste(qr_img, (qr_x, qr_y), qr_img)
-            
-            # Draw participant ID below QR code
-            draw = ImageDraw.Draw(img, 'RGBA')
-            try:
-                id_font = ImageFont.truetype("arial.ttf", 18)
-            except:
-                id_font = ImageFont.load_default()
-            
-            bbox = draw.textbbox((0, 0), participant_id, font=id_font)
-            id_width = bbox[2] - bbox[0]
-            x_id = (self.card_width_px - id_width) // 2
-            
-            draw.text((x_id, qr_y + qr_size + 20), participant_id, fill=(0, 255, 136, 255), font=id_font)
-            
-            logger.info(f"✅ Added QR code with participant_id: {participant_id}")
-            
-        except Exception as e:
-            logger.warning(f"⚠️ Failed to add QR code: {e}")
     
     def _wrap_text(self, text: str, font, max_width: int) -> list:
         """Wrap text to fit within max_width."""

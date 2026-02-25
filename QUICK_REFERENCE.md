@@ -59,13 +59,13 @@ curl -X POST "http://localhost:8000/api/verify-otp" \
 ```
 **Expected**: Team created, PDF generated, email sent
 
-### Test 3: Scan QR Code
+### Test 3: Manual Team Check-In
 ```bash
-curl -X POST "http://localhost:8000/api/attendance/scan" \
+curl -X POST "http://localhost:8000/api/attendance/checkin" \
   -H "Content-Type: application/json" \
-  -d '{"team_id":"HACKCSM-001","access_key":"TEST_ACCESS_KEY_123","timestamp":"2026-02-22T10:00:00"}'
+  -d '{"team_id":"HACKCSM-001"}'
 ```
-**Expected**: Attendance updated, `"message": "Welcome!"`
+**Expected**: JSON with `"status": "success"` and `attendance=true` (or 400/404 on error)
 
 ### Test 4: Get Team Info
 ```bash
@@ -165,26 +165,22 @@ print(f"Generated: {pdf_path}")
 psql $DATABASE_URL
 
 # Check team exists
-SELECT team_code, attendance_status, checkin_time FROM teams 
-WHERE team_code = 'TEAM-XXXXX';
+SELECT team_id, attendance_status, checkin_time FROM teams 
+WHERE team_id = 'HACKCSM-001';
 
 # Should show: attendance_status=false initially
 ```
 
-**Test QR Scan Endpoint**:
+**Manually trigger check-in**:
 ```bash
-# First, get valid QR data from generated PDF
-# Or manually create it
-QR_DATA="{\"team_code\":\"TEAM-XXXXX\",\"participant_id\":\"TEAM-XXXXX-000\",\"participant_name\":\"John Doe\",\"is_team_leader\":true,\"timestamp\":\"2026-02-22T10:00:00\"}"
-
-curl -X POST "http://localhost:8000/api/attendance/scan" \
+curl -X POST "http://localhost:8000/api/attendance/checkin" \
   -H "Content-Type: application/json" \
-  -d "{\"qr_data\": \"$QR_DATA\"}"
+  -d '{"team_id":"HACKCSM-001"}'
 ```
 
 **Check Result**:
 ```bash
-# Should return: "status": "success"
+# Should return: "status": "success" and attendance=true
 # Database should now show: attendance_status=true, checkin_time=<timestamp>
 ```
 
@@ -197,7 +193,7 @@ curl -X POST "http://localhost:8000/api/attendance/scan" \
 | `/api/register` | POST | Register team (JSON) | ✅ Working |
 | `/api/register-multipart` | POST | Register team (with photos) | ✅ Working |
 | `/api/verify-otp` | POST | Verify OTP, create team | ✅ Working |
-| `/api/attendance/scan` | POST | Scan QR, update attendance | ✅ Working |
+| `/api/attendance/checkin` | POST | Manual team check-in (team_id) | ✅ Working |
 | `/api/team/by-code/{code}` | GET | Get team info | ✅ Working |
 | `/api/teams` | GET | List all teams | ✅ Available |
 
@@ -228,15 +224,12 @@ curl -X POST "http://localhost:8000/api/attendance/scan" \
 }
 ```
 
-### QR Scan Success
+### Manual Check-in Success
 ```json
 {
   "status": "success",
-  "message": "👋 Welcome John Doe!",
-  "team_name": "Innovators",
-  "participant_id": "TEAM-K9X2V5-000",
-  "attendance_status": true,
-  "checkin_time": "2026-02-22T10:30:45"
+  "team_id": "HACKCSM-001",
+  "attendance": true
 }
 ```
 
@@ -253,7 +246,7 @@ tail -f app.log
 # ✅ = Success
 # ❌ = Error
 # 📧 = Email
-# 📱 = PDF/QR
+# 📱 = PDF
 # 👤 = Team member
 ```
 
@@ -302,7 +295,7 @@ APP_PORT=8000
 | `test_email_config.py` | Test SMTP config | `python test_email_config.py` |
 | `test_pdf_system.py` | Test PDF generation | `python test_pdf_system.py` |
 | `debug_otp.py` | Debug OTP flow | `python debug_otp.py` |
-| `validate_attendance_qr.py` | Validate QR format | `python validate_attendance_qr.py` |
+| `validate_attendance_qr.py` | Validate manual check-in & card visuals | `python validate_attendance_qr.py` |
 
 ---
 
@@ -315,7 +308,7 @@ After setup, verify:
 - [ ] OTP sent: Check email inbox
 - [ ] ID cards generated: Check `assets/` folder
 - [ ] PDF has all members: Open PDF and count pages
-- [ ] QR scans update DB: Run `test_complete_flow.py`
+- [ ] Attendance shows true after manual check-in: Run `test_complete_flow.py`
 - [ ] Attendance shows true: Query database after scan
 
 ---
@@ -386,8 +379,6 @@ clear_all_otps()
    psql $DATABASE_URL -c "COPY teams TO STDOUT CSV" > attendance_backup.csv
    ```
 
-5. **Simulate QR Scanner**:
-   Create Python script to generate valid QR data and scan requests
 
 ---
 

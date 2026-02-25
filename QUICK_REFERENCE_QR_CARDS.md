@@ -1,4 +1,4 @@
-# Quick Reference: Attendance QR & Glossy ID Cards
+# Quick Reference: Manual Team Check‑in & ID Cards
 
 ## 🚀 Quick Start
 
@@ -22,46 +22,32 @@ open http://localhost:3000/registration
 
 | File | Key Changes |
 |------|------------|
-| `pdf_generator.py` | Vibrant AI theme, glossy effects, team lead badge, attendance QR |
-| `routes.py` | Team leader photo upload, `/api/attendance/scan` endpoint |
-| `tasks.py` | Parse "name\|email\|phone\|photo\|ROLE" format |
-| `schemas.py` | New `AttendanceQRIn` schema |
+| `idcard_service.py` | Futuristic gradient design, no QR codes, "Verified Participant" text |
+| `routes.py` | Added manual `/api/attendance/checkin` endpoint; cleaned QR logic |
+| `tasks.py` | Deprecated QR asset generation, stores only PDF path |
+| `schemas.py` | `TeamCheckinIn` schema for check-in input |
 
-### Frontend (`frontend/app/registration/`)
+### Frontend (`frontend/app/checkin/`)
 
 | File | Key Changes |
 |------|------------|
-| `page.tsx` | Team leader photo upload, member limit (max 3), delete button |
+| `page.tsx` | Replaced camera/QR UI with team ID input form |
 
 ## 🎨 Color Palette (RGB)
 
 ```python
-# Gradients
-gradient_start = (0, 50, 180)        # Electric Blue
-gradient_end = (150, 20, 100)        # Deep Magenta
+# Gradient background: purple to cyan
+gradient_start = (128, 0, 128)       # Purple
+gradient_end = (0, 255, 255)          # Cyan
 
 # Accents
-cyan_neon = (0, 255, 200)            # Bright Cyan
-magenta_neon = (255, 100, 200)       # Pink
-
-# Special
-team_lead_badge = (255, 150, 0)      # Gold
-text_orange = (255, 180, 0)          # Names
-text_cyan = (0, 200, 255)            # Info
+neon_green = (0, 255, 136)
+neon_cyan = (0, 232, 255)
+neon_magenta = (200, 0, 255)
+neon_orange = (255, 170, 0)
 ```
 
-## 🔐 QR Code Data Format
-
-```json
-{
-  "team_id": "HACK-2026-001",
-  "participant": "John Doe",
-  "index": 0,
-  "is_team_leader": true,
-  "attendance": false,
-  "timestamp": "2026-02-21T10:30:00"
-}
-```
+<!-- QR codes are no longer used. Manual check-in only. -->
 
 ## 📝 Team Member String Format
 
@@ -97,28 +83,32 @@ leader_photo: <File>
 photos: [<File>, <File>]
 ```
 
-### Scan Attendance QR
+### Manual Attendance Check-in
 ```bash
-POST /api/attendance/scan
+POST /api/attendance/checkin
 Content-Type: application/json
 
 {
-  "qr_data": "{\"team_id\": \"HACK-001\", \"participant\": \"John\", ...}"
+  "team_id": "HACKCSM-001"
 }
 
-Response:
+Response (success):
 {
-  "message": "✅ Attendance confirmed for John (Team Lead)",
-  "team_id": "HACK-001",
-  "checkin_time": "2026-02-21T10:30:00"
+  "status": "success",
+  "team_id": "HACKCSM-001",
+  "attendance": true
 }
+
+If already checked in HTTP 400 with detail "Already checked in".
+
+If invalid ID HTTP 404 with detail "Invalid Team ID".
 ```
 
 ## 🗄️ Database Fields
 
 ```python
 Team.team_members       # JSON: pipe-separated with role
-Team.attendance_status  # Boolean: True when QR scanned
+Team.attendance_status  # Boolean: True when team checked in (manual entry)
 Team.checkin_time       # DateTime: When attendance marked
 ```
 
@@ -154,23 +144,14 @@ Team.checkin_time       # DateTime: When attendance marked
 ## 🧪 Testing
 
 ```python
-# Simulate QR scan
-import json, requests
-
-qr_data = {
-    "team_id": "HACK-001",
-    "participant": "John Doe",
-    "index": 0,
-    "is_team_leader": True,
-    "attendance": False,
-    "timestamp": "2026-02-21T10:30:00"
-}
+# Simulate manual check-in
+import requests
 
 response = requests.post(
-    "http://localhost:8000/api/attendance/scan",
-    json={"qr_data": json.dumps(qr_data)}
+    "http://localhost:8000/api/attendance/checkin",
+    json={"team_id": "HACKCSM-001"}
 )
-print(response.json())
+print(response.status_code, response.json())
 ```
 
 ## 🐛 Troubleshooting
@@ -178,9 +159,8 @@ print(response.json())
 | Issue | Solution |
 |-------|----------|
 | Photo not showing | Check 5MB limit, try JPEG format |
-| QR code too small on card | It's 70×70px, visible when printed |
 | Team member limit error | Remove members until 3 total |
-| Attendance not updating | Verify QR JSON format with double quotes |
+| Attendance not updating | Ensure correct team ID and that it hasn't been used |
 | pgAdmin shows old data | Refresh browser, check database commit |
 
 ## 📚 Documentation Files
@@ -243,10 +223,10 @@ save_upload_file(file: UploadFile, team_id: str) -> str
 ## ✅ Pre-Launch Checklist
 
 - [ ] Run `python validate_attendance_qr.py` (all ✅)
+- [ ] Verify basic attendance workflow using team ID input
 - [ ] Test registration form with team leader photo
 - [ ] Verify ID cards generate with glossy design
-- [ ] Check QR codes embed attendance data
-- [ ] Test `/api/attendance/scan` endpoint
+- [ ] Ensure manual check-in works: POST `/api/attendance/checkin`
 - [ ] Verify pgAdmin shows attendance_status updates
 - [ ] Test file upload validation (size, type)
 - [ ] Test team member limit enforcement

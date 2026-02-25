@@ -11,7 +11,7 @@ import uuid
 from typing import List, Dict, Optional
 
 from app.models import Team, TeamMember
-from app.utils import generate_next_team_id, generate_access_key, save_qr
+from app.utils import generate_next_team_id, generate_access_key
 from app.otp_manager import get_registration_data, delete_registration_data
 
 logger = logging.getLogger(__name__)
@@ -125,7 +125,9 @@ async def create_team_and_members(
 
 
 # ============================================================
-# GENERATE QR FOR EACH MEMBER
+# GENERATE QR FOR EACH MEMBER (LEGACY)
+# This function is no longer used by the manual check-in workflow.
+# It remains only to satisfy existing clients that still call it.
 # ============================================================
 
 async def generate_member_qr_codes(
@@ -133,37 +135,13 @@ async def generate_member_qr_codes(
     members: List[Dict],
     out_dir: str = "assets"
 ) -> List[Dict]:
+    """Legacy stub: return an empty list and log a warning.
 
-    try:
-        qr_codes = []
-
-        for member in members:
-
-            payload = {
-                "team_id": team_id,
-                "member_id": member["member_id"],
-                "access_key": member["access_key"]
-            }
-
-            qr_path = save_qr(
-                payload,
-                out_dir=out_dir,
-                filename_prefix=f"{team_id}_{member['member_id']}"
-            )
-
-            qr_codes.append({
-                "member_id": member["member_id"],
-                "member_name": member["name"],
-                "qr_path": qr_path
-            })
-
-            logger.info(f"✅ QR generated for {member['name']}")
-
-        return qr_codes
-
-    except Exception as e:
-        logger.exception(f"❌ QR generation failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Error generating QR codes"
-        )   
+    The original implementation generated PNG files using the
+    :func:`utils.save_qr` helper.  That behavior is not needed for the
+    current attendance system so the stub simply avoids filesystem
+    operations and does not import the QR library.
+    """
+    logger.warning("generate_member_qr_codes called but QR generation is deprecated; returning empty list")
+    return []
+   
