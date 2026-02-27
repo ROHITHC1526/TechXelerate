@@ -21,11 +21,8 @@ CREATE TABLE IF NOT EXISTS team_members (
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL,
     phone VARCHAR(50) NOT NULL,
-    photo_path VARCHAR(512),
     is_team_leader BOOLEAN DEFAULT FALSE,
     access_key VARCHAR(64) UNIQUE NOT NULL,
-    attendance_status BOOLEAN DEFAULT FALSE,
-    checkin_time TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     CONSTRAINT fk_team_id FOREIGN KEY (team_id) REFERENCES teams(team_id) ON DELETE CASCADE,
     CONSTRAINT unique_team_member UNIQUE (team_id, email)
@@ -34,7 +31,7 @@ CREATE TABLE IF NOT EXISTS team_members (
 -- Create indexes for faster queries
 CREATE INDEX idx_team_members_team_id ON team_members(team_id);
 CREATE INDEX idx_team_members_email ON team_members(email);
-CREATE INDEX idx_team_members_attendance ON team_members(attendance_status);
+-- attendance index removed (no longer applicable)
 CREATE INDEX idx_team_members_leader ON team_members(is_team_leader);
 
 -- ================================================================

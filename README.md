@@ -14,6 +14,32 @@ docker-compose up --build
 
 API endpoints are under `/api`.
 
+### Registration payload changes
+
+The `/api/register` endpoint now expects structured member objects rather than
+a list of strings. Example JSON body:
+
+```json
+{
+  "team_name": "My Team",
+  "leader_name": "Alice",
+  "leader_email": "alice@example.com",
+  "leader_phone": "1234567890",
+  "college_name": "Example College",
+  "year": "III",
+  "domain": "AI",
+  "team_members": [
+    {"name": "Alice","email": "alice@example.com","phone": "1234567890","is_team_leader": true},
+    {"name": "Bob","email": "bob@example.com","phone": "0987654321","is_team_leader": false}
+  ],
+  "terms_accepted": true
+}
+```
+
+Only **up to three total participants** are allowed (leader plus a maximum of
+two additional members). The API will reject requests exceeding this limit.
+
+
 ---
 
 ## Simplified Mode

@@ -58,15 +58,68 @@ async def create_team_and_members(
         # Get members list
         team_members = registration_data.get("team_members", [])
 
-        if not isinstance(team_members, list) or not team_members:
+        if not isinstance(team_members, list):
             raise HTTPException(
                 status_code=400,
-                detail="No team members provided"
+                detail="Invalid team_members format"
+            )
+
+        if not team_members:
+            # no members in array – try to synthesize leader record from
+            # the top‑level registration data, which is always present.
+            leader_name = registration_data.get("leader_name")
+            leader_email = registration_data.get("leader_email")
+            leader_phone = registration_data.get("leader_phone")
+            if leader_name and leader_email and leader_phone:
+                team_members = [{
+                    "name": leader_name,
+                    "email": leader_email,
+                    "phone": leader_phone,
+                    "is_team_leader": True,
+                }]
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No team members provided"
+                )
+
+        # enforce size constraint here as a safety net (schema already restricts)
+        if len(team_members) > 3:
+            raise HTTPException(
+                status_code=400,
+                detail="Maximum of 3 team members allowed (including leader)"
+            )
+
+        # ensure leader information is present in the list.
+        # registration_data contains leader_name/email/phone separately for
+        # OTP purposes; front‑end also sends the leader object explicitly, but
+        # legacy clients might not.  If the list contains no entry with the
+        # leader flag, inject one at the front using the top‑level details.
+        has_leader = any(isinstance(m, dict) and m.get("is_team_leader") for m in team_members)
+        if not has_leader:
+            # use values from registration_data if available, otherwise fall back
+            # on the first member in the list.
+            leader_info = {
+                "name": registration_data.get("leader_name") or (team_members[0].get("name") if team_members else None),
+                "email": registration_data.get("leader_email") or (team_members[0].get("email") if team_members else None),
+                "phone": registration_data.get("leader_phone") or (team_members[0].get("phone") if team_members else None),
+                "is_team_leader": True,
+            }
+            # prepend leader if not already present
+            team_members = [leader_info] + team_members
+            # update local reference
+        else:
+            team_members = list(team_members)  # ensure mutable copy
+        # after injection, still enforce max size
+        if len(team_members) > 3:
+            raise HTTPException(
+                status_code=400,
+                detail="Maximum of 3 team members allowed (including leader)"
             )
 
         created_members = []
 
-        for idx, member_data in enumerate(team_members):
+        for member_data in team_members:
 
             if not isinstance(member_data, dict):
                 raise HTTPException(
@@ -75,6 +128,7 @@ async def create_team_and_members(
                 )
 
             access_key = generate_access_key(64)
+            is_leader = bool(member_data.get("is_team_leader"))
 
             member = TeamMember(
                 id=uuid.uuid4(),
@@ -82,11 +136,8 @@ async def create_team_and_members(
                 name=member_data.get("name"),
                 email=member_data.get("email"),
                 phone=member_data.get("phone"),
-                photo_path=member_data.get("photo_path"),
-                is_team_leader=(idx == 0),
-                access_key=access_key,
-                attendance_status=False,
-                checkin_time=None
+                is_team_leader=is_leader,
+                access_key=access_key
             )
 
             db.add(member)

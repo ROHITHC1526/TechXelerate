@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Validation script for attendance features & ID card design.
+# (obsolete) validation script for attendance features & ID card design.
+# Attendance and QR features have been removed from current backend.
 Originally built for QR scanning; now validates new manual check‑in endpoint
 and ensures team leader photo support and updated card visuals.
 """

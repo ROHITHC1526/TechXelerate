@@ -295,12 +295,9 @@ async def verify_otp_endpoint(
                             'name': parts[0].strip(),
                             'email': parts[1].strip(),
                             'phone': parts[2].strip(),
-                            'photo_path': None,
                             'is_team_leader': idx == 0
                         }
                         
-                        if len(parts) > 3 and parts[3].strip():
-                            member['photo_path'] = parts[3].strip()
                         
                         if len(parts) > 4:
                             role = parts[4].strip().upper()

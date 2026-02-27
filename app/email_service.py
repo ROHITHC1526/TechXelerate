@@ -180,7 +180,7 @@ TechXelarate Team
                 </p>
                 <p style="margin: 8px 0;">© 2026 TechXelarate | CSE (AI & ML) - LBRCE</p>
                 <p style="margin: 5px 0; color: #606060; font-size: 11px;">
-                    Questions? Reply to this email or contact us at hackathon@cse.lbrce.edu
+                    Questions? Reply to this email or contact us at lbrcehackcsm@gmail.com
                 </p>
             </div>
         </div>
@@ -313,6 +313,7 @@ TechXelarate Team
             with smtplib.SMTP(settings.SMTP_HOST, int(settings.SMTP_PORT), timeout=10) as server:
                 logger.info("📤 Starting TLS...")
                 server.starttls()
+                print("SMTP USER LOADED:", settings.SMTP_USER) 
                 logger.info("📤 Authenticating...")
                 server.login(settings.SMTP_USER, settings.SMTP_PASS)
                 logger.info(f"📤 Sending message from {settings.SMTP_USER} to {to_email}")
@@ -418,7 +419,7 @@ MOTIVATION:
 
 Need Help?
 If you have any questions or concerns, please reply to this email
-or contact the organizers at hackathon@cse.lbrce.edu
+or contact the organizers at lbrcehackcsm@gmail.com
 
 We're excited to see your innovative ideas come to life!
 

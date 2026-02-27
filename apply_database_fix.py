@@ -60,8 +60,7 @@ async def main():
                     "ALTER TABLE teams DROP COLUMN IF EXISTS access_key CASCADE;",
                     "ALTER TABLE teams DROP COLUMN IF EXISTS qr_code_path CASCADE;",
                     "ALTER TABLE teams DROP COLUMN IF EXISTS id_cards_pdf_path CASCADE;",
-                    "ALTER TABLE teams DROP COLUMN IF EXISTS attendance_status CASCADE;",
-                    "ALTER TABLE teams DROP COLUMN IF EXISTS checkin_time CASCADE;",
+                    # attendance and checkin columns dropped previously
                     "ALTER TABLE teams DROP COLUMN IF EXISTS checkout_time CASCADE;",
                 ]
                 
@@ -84,11 +83,8 @@ async def main():
                     name VARCHAR(255) NOT NULL,
                     email VARCHAR(255) NOT NULL,
                     phone VARCHAR(50) NOT NULL,
-                    photo_path VARCHAR(512),
                     is_team_leader BOOLEAN DEFAULT FALSE,
                     access_key VARCHAR(64) UNIQUE NOT NULL,
-                    attendance_status BOOLEAN DEFAULT FALSE,
-                    checkin_time TIMESTAMP WITH TIME ZONE,
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                     CONSTRAINT fk_team_id FOREIGN KEY (team_id) REFERENCES teams(team_id) ON DELETE CASCADE
                 );
@@ -104,7 +100,7 @@ async def main():
                 index_commands = [
                     "CREATE INDEX IF NOT EXISTS idx_team_members_team_id ON team_members(team_id);",
                     "CREATE INDEX IF NOT EXISTS idx_team_members_email ON team_members(email);",
-                    "CREATE INDEX IF NOT EXISTS idx_team_members_attendance ON team_members(attendance_status);",
+                    # attendance index removed
                     "CREATE INDEX IF NOT EXISTS idx_team_members_access_key ON team_members(access_key);",
                     "CREATE INDEX IF NOT EXISTS idx_teams_team_id ON teams(team_id);",
                 ]

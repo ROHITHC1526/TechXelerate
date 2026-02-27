@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request, WebSocket, WebSocketDisconnect, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, Request, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from .schemas import RegisterIn, OTPIn, TeamOut, AdminLogin, DownloadIDIn
@@ -7,7 +7,7 @@ from .models import Team, TeamMember
 from .config import settings
 from .auth import create_access_token, get_password_hash, verify_password, get_current_admin
 from .utils import generate_otp, generate_access_key, generate_team_id, generate_next_team_id
-from .tasks import send_otp_email_sync, generate_assets_and_email
+from .tasks import send_otp_email_sync
 from .otp_manager import store_otp, get_otp, verify_otp as verify_otp_from_manager, delete_otp, store_registration_data, get_registration_data, delete_registration_data
 from .email_service import EmailService
 from .verify_otp_service import verify_otp_endpoint as enhanced_verify_otp
@@ -26,59 +26,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
 
-# Ensure uploads directory exists
-UPLOADS_DIR = os.path.join(os.getcwd(), "uploads")
-Path(UPLOADS_DIR).mkdir(parents=True, exist_ok=True)
+# photo upload support removed – feature deprecated
 
-
-async def save_upload_file(upload_file: UploadFile, team_id: str = None) -> str:
-    """
-    Save uploaded file to uploads directory.
-    
-    Args:
-        upload_file: The file uploaded by user
-        team_id: Optional team ID for organizing files
-        
-    Returns:
-        Path to saved file
-        
-    Raises:
-        HTTPException: If file type is invalid or save fails
-    """
-    # Validate file type
-    allowed_types = {'image/jpeg', 'image/png', 'image/jpg'}
-    if upload_file.content_type not in allowed_types:
-        raise HTTPException(
-            status_code=400,
-            detail=f"❌ Invalid file type. Only JPEG and PNG images are allowed. Got: {upload_file.content_type}"
-        )
-    
-    # Validate file size (max 5MB)
-    max_size = 5 * 1024 * 1024  # 5MB
-    file_content = await upload_file.read()
-    if len(file_content) > max_size:
-        raise HTTPException(
-            status_code=400,
-            detail="❌ File too large. Maximum size is 5MB"
-        )
-    
-    # Generate safe filename
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    file_ext = ".jpg" if upload_file.content_type in {'image/jpeg', 'image/jpg'} else ".png"
-    filename = f"{team_id or 'temp'}_{timestamp}{file_ext}"
-    
-    filepath = os.path.join(UPLOADS_DIR, filename)
-    
-    try:
-        # Write file
-        with open(filepath, 'wb') as f:
-            f.write(file_content)
-        
-        logger.info(f"✓ File saved: {filepath}")
-        return filepath
-    except Exception as e:
-        logger.error(f"❌ Failed to save file: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
 
 
 def generate_team_id_sequential(seq: int) -> str:
@@ -86,137 +35,12 @@ def generate_team_id_sequential(seq: int) -> str:
     return f"HACK-{seq:03d}"
 
 
-@router.post("/register-multipart", status_code=202)
-async def register_multipart(
-    team_name: str = Form(...),
-    leader_name: str = Form(...),
-    leader_email: str = Form(...),
-    leader_phone: str = Form(...),
-    college_name: str = Form(...),
-    year: str = Form(...),
-    domain: str = Form(...),
-    team_members_json: str = Form(...),
-    photos: list[UploadFile] = File(default=[]),
-    leader_photo: UploadFile | None = File(default=None),
-    request: Request = None
-):
-    """
-    Register team with photo uploads - STEP 1: Send OTP
-    Accepts multipart/form-data with file uploads.
-    Returns OTP sent message, requiring verification before team is created.
-    
-    team_members_json: JSON string of [{name, email, phone}, ...]
-    photos: List of photo files for team members (optional)
-    leader_photo: Photo file for team leader (optional)
-    """
-    try:
-        # Parse team members from JSON
-        team_members = json.loads(team_members_json)
-        if not isinstance(team_members, list):
-            raise ValueError("team_members must be a list")
-    except (json.JSONDecodeError, ValueError) as e:
-        raise HTTPException(status_code=400, detail=f"Invalid team_members JSON: {str(e)}")
-    
-    # Save team leader photo (first member is leader)
-    leader_photo_path = None
-    if leader_photo:
-        try:
-            leader_photo_path = await save_upload_file(leader_photo, team_id="leader")
-            logger.info(f"✓ Photo saved for team leader: {leader_photo_path}")
-        except HTTPException as he:
-            logger.warning(f"⚠️ Could not save photo for team leader: {he.detail}")
-    
-    # Save photos and build team members with photo paths
-    team_members_with_photos = []
-    for idx, member in enumerate(team_members):
-        member_dict = {
-            'name': member.get('name', ''),
-            'email': member.get('email', ''),
-            'phone': member.get('phone', ''),
-            'is_team_leader': False
-        }
-        
-        # Try to save photo if provided
-        if idx < len(photos) and photos[idx]:
-            try:
-                photo_path = await save_upload_file(photos[idx], team_id=f"member_{idx}")
-                member_dict['photo_path'] = photo_path
-                logger.info(f"✓ Photo saved for member {idx}: {photo_path}")
-            except HTTPException as he:
-                logger.warning(f"⚠️ Could not save photo for member {idx}: {he.detail}")
-        
-        team_members_with_photos.append(member_dict)
-    
-    # Add team leader as first team member
-    leader_member = {
-        'name': leader_name,
-        'email': leader_email,
-        'phone': leader_phone,
-        'is_team_leader': True
-    }
-    if leader_photo_path:
-        leader_member['photo_path'] = leader_photo_path
-    
-    all_members = [leader_member] + team_members_with_photos
-    
-    # Convert team members to pipe-separated format
-    team_members_formatted = []
-    for idx, member in enumerate(all_members):
-        parts = [member['name'], member['email'], member['phone']]
-        if member.get('photo_path'):
-            parts.append(member['photo_path'])
-        parts.append('TEAM_LEAD' if member.get('is_team_leader') else 'MEMBER')
-        team_members_formatted.append('|'.join(parts))
-    
-    # Prepare registration data
-    registration_data = {
-        'team_name': team_name,
-        'leader_name': leader_name,
-        'leader_email': leader_email,
-        'leader_phone': leader_phone,
-        'college_name': college_name,
-        'year': year,
-        'domain': domain,
-        'team_members': team_members_formatted,
-    }
-    
-    # Generate OTP
-    otp = generate_otp()
-    
-    # Store OTP (5 minutes)
-    store_otp(leader_email, otp, expiry_seconds=300)
-    
-    # Store registration data (5 minutes)
-    store_registration_data(leader_email, registration_data, expiry_seconds=300)
-    
-    # Send OTP email
-    otp_sent = False
-    try:
-        logger.info(f"📧 Sending OTP email to {leader_email}")
-        otp_sent = send_otp_email_sync(leader_email, otp)
-        if otp_sent:
-            logger.info(f"✅ OTP email sent to {leader_email}")
-        else:
-            logger.warning(f"⚠️ Failed to send OTP email to {leader_email}")
-    except Exception as e:
-        logger.exception(f"⚠️ Exception sending OTP: {e}")
-    
-    if otp_sent:
-        return {
-            "status": "success",
-            "message": f"✅ OTP sent successfully to {leader_email}. Check your inbox (including spam folder) for the 6-digit code. OTP expires in 5 minutes.",
-            "step": "otp_verification"
-        }
-    else:
-        # Fallback for development
-        logger.warning("⚠️ Email sending failed - returning OTP for testing")
-        return {
-            "status": "warning",
-            "message": "⚠️ Email sending failed. Check SMTP settings in .env file.",
-            "otp": otp,
-            "step": "otp_verification",
-            "note": "To fix: Configure SMTP_HOST, SMTP_USER, SMTP_PASS in .env file"
-        }
+# multipart registration endpoint removed – photos are no longer supported.
+# Clients should use the simple /register route instead.
+# Any request to this URL will now return 410 Gone.
+@router.post("/register-multipart", status_code=status.HTTP_410_GONE)
+async def register_multipart_removed():
+    raise HTTPException(status_code=status.HTTP_410_GONE, detail="Photo upload registration has been removed. Use /register with JSON payload.")
 
 
 @router.post("/register", status_code=202)
@@ -275,8 +99,8 @@ async def verify_otp_endpoint(payload: OTPIn, db: AsyncSession = Depends(get_db)
 
 @router.get('/admin/export')
 
-async def export_teams(domain: str = None, year: str = None, attendance: str = None, db: AsyncSession = Depends(get_db), _admin=Depends(get_current_admin)):
-    """Export teams as CSV. Filters: domain, year, attendance (true/false). Admin-only."""
+async def export_teams(domain: str = None, year: str = None, db: AsyncSession = Depends(get_db), _admin=Depends(get_current_admin)):
+    """Export teams as CSV. Filters: domain, year. Admin-only."""
     from io import StringIO
     import csv
 
@@ -289,17 +113,13 @@ async def export_teams(domain: str = None, year: str = None, attendance: str = N
 
     output = StringIO()
     writer = csv.writer(output)
-    writer.writerow(["team_id", "team_name", "college_name", "domain", "total_members", "present_count", "absent_count", "created_at"])
+    writer.writerow(["team_id", "team_name", "college_name", "domain", "total_members", "created_at"])
     
     for team in teams:
-        # Get member stats for this team
         members_q = await db.execute(
             select(TeamMember).where(TeamMember.team_id == team.team_id)
         )
         members = members_q.scalars().all()
-        
-        present_count = sum(1 for m in members if m.attendance_status)
-        absent_count = len(members) - present_count
         
         writer.writerow([
             team.team_id, 
@@ -307,8 +127,6 @@ async def export_teams(domain: str = None, year: str = None, attendance: str = N
             team.college_name,
             team.domain, 
             len(members),
-            present_count,
-            absent_count,
             team.created_at.isoformat() if team.created_at else ''
         ])
 
@@ -318,16 +136,15 @@ async def export_teams(domain: str = None, year: str = None, attendance: str = N
 
 
 @router.get('/admin/teams')
-async def list_teams(page: int = 1, page_size: int = 50, search: str = None, domain: str = None, attendance: str = None, db: AsyncSession = Depends(get_db), _admin=Depends(get_current_admin)):
+async def list_teams(page: int = 1, page_size: int = 50, search: str = None, domain: str = None, db: AsyncSession = Depends(get_db), _admin=Depends(get_current_admin)):
     """
-    List teams with member attendance statistics.
+    List teams (attendance tracking removed).
     
     Args:
         page: Page number (1-indexed)
         page_size: Results per page
         search: Search by team_id or team_name
         domain: Filter by domain
-        attendance: Filter by attendance status ('true' or 'false')
         db: Database session
         _admin: Authenticated admin user
     """
@@ -351,18 +168,6 @@ async def list_teams(page: int = 1, page_size: int = 50, search: str = None, dom
         )
         members = members_q.scalars().all()
         
-        present_count = sum(1 for m in members if m.attendance_status)
-        absent_count = len(members) - present_count
-        
-        # Apply attendance filter if specified
-        if attendance is not None:
-            if attendance.lower() in ('true', '1'):
-                if present_count == 0:  # No members present
-                    continue
-            elif attendance.lower() in ('false', '0'):
-                if absent_count == 0:  # All members present
-                    continue
-        
         # Get team leader info
         leader = None
         for m in members:
@@ -377,9 +182,8 @@ async def list_teams(page: int = 1, page_size: int = 50, search: str = None, dom
             'leader_email': leader.email if leader else 'N/A',
             'domain': team.domain,
             'total_members': len(members),
-            'present_count': present_count,
-            'absent_count': absent_count,
         })
+
     return { 'total': total, 'page': page, 'page_size': page_size, 'items': out }
 
 
@@ -392,18 +196,13 @@ async def stats(db: AsyncSession = Depends(get_db)):
     total_members_q = await db.execute(select(func.count(TeamMember.id)))
     total_members = total_members_q.scalar() or 0
     
-    present_members_q = await db.execute(select(func.count(TeamMember.id)).where(TeamMember.attendance_status == True))
-    present_members = present_members_q.scalar() or 0
-    
+    # attendance metrics removed
     domain_q = await db.execute(select(Team.domain, func.count(Team.id)).group_by(Team.domain))
     domain_dist = {row[0]: row[1] for row in domain_q.all()}
     
     return {
         "total_teams": total_teams,
         "total_members": total_members,
-        "present_members": present_members,
-        "absent_members": total_members - present_members,
-        "attendance_rate": f"{(present_members / total_members * 100):.2f}%" if total_members > 0 else "0%",
         "domain_distribution": domain_dist
     }
 
@@ -451,7 +250,7 @@ async def scan_attendance_qr(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/attendance/scan-file")
-async def scan_attendance_file(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+async def scan_attendance_file(db: AsyncSession = Depends(get_db)):
     """
     **Check-in disabled**
 
@@ -471,7 +270,7 @@ async def scan_member_attendance(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/attendance/scan-member-file")
-async def scan_member_attendance_file(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+async def scan_member_attendance_file(db: AsyncSession = Depends(get_db)):
     """
     **Member check-in disabled**
 
@@ -482,7 +281,10 @@ async def scan_member_attendance_file(file: UploadFile = File(...), db: AsyncSes
 
 @router.get("/team/{team_id}")
 async def get_team_by_id(team_id: str, db: AsyncSession = Depends(get_db)):
-    """Get team information by `team_id` (e.g. HACKCSM-001)."""
+    """Get basic team information by `team_id`.
+
+    Attendance fields were removed; this returns only static registration data.
+    """
     try:
         team_q = await db.execute(select(Team).where(Team.team_id == team_id))
         team = team_q.scalars().first()
@@ -501,10 +303,7 @@ async def get_team_by_id(team_id: str, db: AsyncSession = Depends(get_db)):
             "college_name": team.college_name,
             "year": team.year,
             "domain": team.domain,
-            "attendance_status": team.attendance_status,
-            "checkin_time": team.checkin_time.isoformat() if team.checkin_time else None,
             "created_at": team.created_at.isoformat() if team.created_at else None,
-            "team_members_count": len(team.team_members) if isinstance(team.team_members, list) else 0
         }
     
     except HTTPException:
@@ -541,61 +340,8 @@ async def test_email(payload: dict):
 
 @router.get("/team/{team_id}/members")
 async def get_team_members_attendance(team_id: str, db: AsyncSession = Depends(get_db)):
-    """
-    Get all team members and their individual attendance status.
-    
-    Args:
-        team_id: Team ID (e.g., HACKCSM-001)
-        
-    Returns:
-        Team info with list of members and their attendance status
-    """
-    try:
-        # Get team
-        team_q = await db.execute(select(Team).where(Team.team_id == team_id))
-        team = team_q.scalars().first()
-        
-        if not team:
-            raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
-        
-        # Get all members for this team
-        members_q = await db.execute(
-            select(TeamMember).where(TeamMember.team_id == team_id)
-        )
-        members = members_q.scalars().all()
-        
-        members_data = []
-        for member in members:
-            members_data.append({
-                "member_id": str(member.id),
-                "name": member.name,
-                "email": member.email,
-                "phone": member.phone,
-                "is_team_leader": member.is_team_leader,
-                "attendance_status": member.attendance_status,
-                "checkin_time": member.checkin_time.isoformat() if member.checkin_time else None,
-                "created_at": member.created_at.isoformat() if member.created_at else None
-            })
-        
-        # Calculate team statistics
-        present_count = sum(1 for m in members if m.attendance_status)
-        
-        return {
-            "team_id": team.team_id,
-            "team_name": team.team_name,
-            "college_name": team.college_name,
-            "domain": team.domain,
-            "total_members": len(members),
-            "present_count": present_count,
-            "absent_count": len(members) - present_count,
-            "members": members_data
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"❌ Error fetching team members: {e}")
-        raise HTTPException(status_code=500, detail=f"Error fetching team members: {str(e)}")
+    """This endpoint is disabled; individual attendance tracking removed."""
+    raise HTTPException(status_code=410, detail="Member attendance endpoint disabled")
 
 
 @router.websocket('/ws/stats')
