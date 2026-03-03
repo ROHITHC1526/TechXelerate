@@ -2,6 +2,7 @@
   import React, { useEffect, useRef, useState } from 'react'
   import Link from 'next/link'
   import { motion } from 'framer-motion'
+  import BrochurePopup from "./components/BrochurePopup"
   
 
 
@@ -116,6 +117,7 @@
 
     return (
       <main className="relative bg-black text-white overflow-hidden">
+        <BrochurePopup />
         
         {/* Background */}
         <div className="fixed inset-0 z-0">
@@ -438,7 +440,7 @@
               <div>
                 <h4 className="text-gray-300 font-bold mb-4">Follow Us</h4>
                 <div className="flex gap-3">
-                  <a href="https://www.facebook.com/share/1CyEmqbaaP/" className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center hover:bg-cyan-500/40 transition">
+                  <a href="https://www.facebook.com/share/1CyEmqbaaP/"   className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center hover:bg-cyan-500/40 transition">
                   f
                   </a>
                   <a href="https://x.com/lbrce1" className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center hover:bg-cyan-500/40 transition">
