@@ -93,6 +93,10 @@ Team Members:
 1. Save this Team ID for event check-in
 2. Share it with your team members
 
+💳 Please complete your registration payment by visiting:
+https://forms.gle/JTEqHwzVtraKxW9s5
+
+
 🎉 We're excited to see your innovative ideas come to life!
 
 Event Details:
@@ -128,29 +132,29 @@ TechXelarate Team
             
             <h1 style="text-align: center; color: #00ff88; margin: 0 0 10px 0; font-size: 28px;">✅ Registration Confirmed!</h1>
             <h2 style="text-align: center; color: #00e8ff; margin: 0 0 30px 0; font-size: 18px;">🎉 TechXelarate 2026</h2>
-            <h2 style="text-align: center; color: #00e8ff; margin: 0 0 30px 0; font-size: 18px;">
-  🎉 TechXelarate 2026
-</h2>
 
-<div style="text-align: center; margin-top: 20px;">
-  <a href="https://forms.gle/JTEqHwzVtraKxW9s5" target="_blank" 
-     style="
-        display: inline-block;
-        padding: 12px 25px;
-        background: linear-gradient(90deg, #00e8ff, #0077ff);
-        color: #ffffff;
-        text-decoration: none;
-        font-size: 16px;
-        font-weight: bold;
-        border-radius: 8px;
-        box-shadow: 0 4px 15px rgba(0, 232, 255, 0.4);
-        transition: all 0.3s ease;
-     "
-     onmouseover="this.style.transform='scale(1.05)'"
-     onmouseout="this.style.transform='scale(1)'">
-     💳 Click Here to Make Payment
-  </a>
-</div>
+            <!-- payment button section -->
+            <div style="text-align: center; margin-top: 20px;">
+              <a href="https://forms.gle/JTEqHwzVtraKxW9s5" target="_blank" 
+                 style="
+                    display: inline-block;
+                    padding: 12px 25px;
+                    background: linear-gradient(90deg, #00e8ff, #0077ff);
+                    color: #ffffff;
+                    text-decoration: none;
+                    font-size: 16px;
+                    font-weight: bold;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 15px rgba(0, 232, 255, 0.4);
+                    transition: all 0.3s ease;
+                 "
+                 onmouseover="this.style.transform='scale(1.05)'"
+                 onmouseout="this.style.transform='scale(1)';">
+                 💳 Click Here to Make Payment
+              </a>
+            </div>
+            <!-- end payment section -->
+            
             <p style="color: #d0d0d0; font-size: 16px; margin: 0 0 20px 0;">
                 Hello <strong>{leader_name}</strong>,
             </p>
