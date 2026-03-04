@@ -6,7 +6,12 @@ from .config import settings
 # Convert DATABASE_URL to use asyncpg for async connection
 DATABASE_URL = settings.DATABASE_URL.replace('postgresql://', 'postgresql+asyncpg://', 1)
 
-engine: AsyncEngine = create_async_engine(DATABASE_URL, future=True, echo=False)
+engine: AsyncEngine = create_async_engine(
+    DATABASE_URL,
+    future=True,
+    echo=False,
+    connect_args={"ssl": "require"}
+)
 AsyncSessionLocal = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 Base = declarative_base()
