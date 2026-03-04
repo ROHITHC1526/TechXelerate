@@ -909,6 +909,9 @@ video {
   --tw-border-opacity: 1;
   border-color: rgb(6 182 212 / var(--tw-border-opacity, 1));
 }
+.border-cyan-500\/10{
+  border-color: rgb(6 182 212 / 0.1);
+}
 .border-cyan-500\/20{
   border-color: rgb(6 182 212 / 0.2);
 }
@@ -940,9 +943,6 @@ video {
 }
 .border-red-500\/50{
   border-color: rgb(239 68 68 / 0.5);
-}
-.border-cyan-500\/10{
-  border-color: rgb(6 182 212 / 0.1);
 }
 .bg-black{
   --tw-bg-opacity: 1;

@@ -5,7 +5,6 @@ Uses separate email_service module for clean architecture.
 """
 
 from .config import settings
-from .utils import save_qr, create_id_pdf
 from .pdf_generator import IDCardGenerator
 from .email_service import EmailService
 from .quotes import get_random_quote
