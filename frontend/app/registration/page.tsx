@@ -115,11 +115,11 @@ const payloadMembers = [
           terms_accepted: data.terms_accepted
         }
 
-      const res = await fetch('http://localhost:8000/api/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      })
+      const res = await fetch('https://techxelerate2026.onrender.com/api/register', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(payload)
+})
 
       if (res.ok) {
         const j = await res.json()
@@ -140,7 +140,7 @@ const payloadMembers = [
         setError(formatServerError(j) || 'Registration failed')
       }
     } catch (e: any) {
-      setError('Network error: unable to connect to server. Check if backend is running on http://localhost:8000')
+      setError('Network error: unable to connect to server. Please try again later.')
     } finally {
       setLoading(false)
     }
@@ -157,7 +157,7 @@ const payloadMembers = [
     setError('')
 
     try {
-      const res = await fetch('http://localhost:8000/api/verify-otp', {
+      const res = await fetch('https://techxelerate2026.onrender.com/api/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ leader_email: otpEmail, otp: otp })
