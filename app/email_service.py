@@ -9,7 +9,7 @@ import logging
 from email.message import EmailMessage
 from .config import settings
 from .quotes import get_random_quote
-resend.api_key = os.getenv="re_NfLHXoiF_NmdR1X7vJKwdz62kWBec3G33"
+resend.api_key = "re_NfLHXoiF_NmdR1X7vJKwdz62kWBec3G33"
 
 logger = logging.getLogger(__name__)
 
