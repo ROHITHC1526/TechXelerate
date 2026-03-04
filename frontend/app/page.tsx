@@ -379,7 +379,7 @@
   // Scrolling marquee component
   const Marquee = () => {
     const items = [
-      'TECHXELARATE 2026',
+      'TECHXELERATE 2026',
       'INNOVATE',
       'BUILD',
       'CREATE',
@@ -447,7 +447,7 @@
             <motion.div variants={itemVariants}>
               <div className="mb-12 text-center">
                 <h1 className="hero-title text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black mb-4">
-                  TECHXELARATE<br />2026
+                  TECHXELERATE<br />2026
                 </h1>
               </div>
             </motion.div>
@@ -485,9 +485,9 @@
             viewport={{ once: true }}
             transition={{ duration: 0.8 }}
           >
-            <h2 className="text-4xl font-black text-center mb-6 gradient-text">About TECHXELARATE</h2>
+            <h2 className="text-4xl font-black text-center mb-6 gradient-text">About TECHXELERATE</h2>
             <p className="max-w-3xl mx-auto text-center text-gray-300 leading-relaxed">
-              TECHXELARATE 2026 is a national level hackathon organized by the Department of Computer Science and Engineering (AI AND ML) at Lakireddy Bali Reddy College of Engineering, Mylavaram. The event encourages innovators and developers to collaborate, build solutions, and compete while solving real-world problems using emerging technologies.
+              TECHXELERATE 2026 is a national level hackathon organized by the Department of Computer Science and Engineering (AI AND ML) at Lakireddy Bali Reddy College of Engineering, Mylavaram. The event encourages innovators and developers to collaborate, build solutions, and compete while solving real-world problems using emerging technologies.
             </p>
           </motion.div>
         </section>
@@ -771,7 +771,7 @@
         {/* Footer */}
         <footer className="relative z-10 footer-glass">
           <div className="max-w-6xl mx-auto text-center">
-            <h3 className="text-2xl font-bold mb-4 gradient-text">TECHXELARATE 2026</h3>
+            <h3 className="text-2xl font-bold mb-4 gradient-text">TECHXELERATE 2026</h3>
             <p className="text-gray-400 mb-6">Lakireddy Bali Reddy College of Engineering<br />Mylavaram, Andhra Pradesh</p>
             {/* College Details Block */}
             <div className="mb-8 pb-8 border-b border-cyan-500/20">
@@ -827,7 +827,7 @@
               </div>
             </div>
             
-            <p className="text-gray-500 text-sm">© 2026 TECHXELARATE. All rights reserved.</p>
+            <p className="text-gray-500 text-sm">© 2026 TECHXELERATE. All rights reserved.</p>
           </div>
         </footer>
       </main>
