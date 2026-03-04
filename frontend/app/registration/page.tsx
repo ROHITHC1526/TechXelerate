@@ -199,7 +199,7 @@ const payloadMembers = [
                   <p className="text-xs text-gray-500 mb-1">TEAM ID</p>
                   <p className="text-3xl font-mono font-bold text-green-300">{registered.team_id}</p>
                 </div>
-                <p className="text-gray-400 text-sm">Check email for OTP confirmation and ID card</p>
+                <p className="text-gray-400 text-sm">Check email for OTP confirmation and for Payment</p>
               </div>
             </div>
           </div>
