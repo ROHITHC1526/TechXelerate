@@ -2,13 +2,14 @@
 Professional email service for hackathon registration and ID card delivery.
 Handles OTP emails, registration confirmation, and ID card distribution with attachments.
 """
-
+import resend
 import smtplib
 import os
 import logging
 from email.message import EmailMessage
 from .config import settings
 from .quotes import get_random_quote
+resend.api_key = os.getenv="re_NfLHXoiF_NmdR1X7vJKwdz62kWBec3G33"
 
 logger = logging.getLogger(__name__)
 
@@ -221,14 +222,12 @@ TechXelarate Team
             
             # Send email
             logger.info(f"🔌 Connecting to SMTP: {settings.SMTP_HOST}:{settings.SMTP_PORT}")
-            with smtplib.SMTP(settings.SMTP_HOST, int(settings.SMTP_PORT), timeout=10) as server:
-                logger.info("📤 Starting TLS...")
-                server.starttls()
-                logger.info("📤 Authenticating...")
-                server.login(settings.SMTP_USER, settings.SMTP_PASS)
-                logger.info(f"📤 Sending registration confirmation to {to_email}")
-                server.send_message(message)
-            
+            resend.Emails.send({
+    "from": "TechXelarate <onboarding@resend.dev>",
+    "to": [to_email],
+    "subject": message["Subject"],
+    "html": html_body
+})
             logger.info(f"✅ Registration confirmation sent to {to_email}")
             print(f"✅ Confirmation Email Sent: {to_email}")
             return True
@@ -336,17 +335,12 @@ TechXelarate Team
             
             # Send email
             logger.info(f"🔌 Connecting to SMTP: {settings.SMTP_HOST}:{settings.SMTP_PORT}")
-            with smtplib.SMTP(settings.SMTP_HOST, int(settings.SMTP_PORT)) as server:
-             server.ehlo()
-            logger.info("📤 Starting TLS...")
-            server.starttls()
-            server.ehlo()
-            print("SMTP USER LOADED:", settings.SMTP_USER)
-            logger.info("📤 Authenticating...")
-            server.login(settings.SMTP_USER, settings.SMTP_PASS)
-            logger.info(f"📤 Sending message from {settings.SMTP_USER} to {to_email}")
-            server.send_message(message)
-            
+            resend.Emails.send({
+    "from": "TechXelarate <onboarding@resend.dev>",
+    "to": [to_email],
+    "subject": message["Subject"],
+    "html": html_body
+})
             logger.info(f"✅ OTP email delivered successfully to {to_email} | Code: {otp}")
             print(f"✅ OTP Sent: {to_email}")  # Also print to console
             return True
@@ -569,12 +563,12 @@ CSE (AI & ML) - LBRCE
                 return False
             
             # Send email
-            with smtplib.SMTP(settings.SMTP_HOST, int(settings.SMTP_PORT)) as server:
-                server.ehlo()
-                server.starttls()
-                server.ehlo()
-                server.login(settings.SMTP_USER, settings.SMTP_PASS)
-                server.send_message(message)
+            resend.Emails.send({
+    "from": "TechXelarate <onboarding@resend.dev>",
+    "to": [to_email],
+    "subject": message["Subject"],
+    "html": html_body
+})
             
             logger.info(f"✓ ID cards email sent successfully to {to_email}")
             return True

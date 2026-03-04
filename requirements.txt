@@ -14,3 +14,4 @@ pydantic-settings
 aiosmtplib
 gunicorn
 numpy
+resend
