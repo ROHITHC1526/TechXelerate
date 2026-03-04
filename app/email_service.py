@@ -336,14 +336,16 @@ TechXelarate Team
             
             # Send email
             logger.info(f"🔌 Connecting to SMTP: {settings.SMTP_HOST}:{settings.SMTP_PORT}")
-            with smtplib.SMTP(settings.SMTP_HOST, int(settings.SMTP_PORT), timeout=10) as server:
-                logger.info("📤 Starting TLS...")
-                server.starttls()
-                print("SMTP USER LOADED:", settings.SMTP_USER) 
-                logger.info("📤 Authenticating...")
-                server.login(settings.SMTP_USER, settings.SMTP_PASS)
-                logger.info(f"📤 Sending message from {settings.SMTP_USER} to {to_email}")
-                server.send_message(message)
+            with smtplib.SMTP(settings.SMTP_HOST, int(settings.SMTP_PORT)) as server:
+             server.ehlo()
+            logger.info("📤 Starting TLS...")
+            server.starttls()
+            server.ehlo()
+            print("SMTP USER LOADED:", settings.SMTP_USER)
+            logger.info("📤 Authenticating...")
+            server.login(settings.SMTP_USER, settings.SMTP_PASS)
+            logger.info(f"📤 Sending message from {settings.SMTP_USER} to {to_email}")
+            server.send_message(message)
             
             logger.info(f"✅ OTP email delivered successfully to {to_email} | Code: {otp}")
             print(f"✅ OTP Sent: {to_email}")  # Also print to console
@@ -408,13 +410,11 @@ TechXelarate Team
             message["Subject"] = "🏆 TechXelarate - Your Official Hackathon ID Cards"
             
             plain_body = f"""
-🎉 TechXelarate 2026 - Hackathon ID Cards
 
 Hello {leader_name},
 
 Congratulations! Your team '{team_name}' has been successfully registered for TechXelarate 2026.
 
-We've attached your official professional ID cards as a PDF.
 
 TEAM DETAILS:
 ─────────────────────────────────────
@@ -463,7 +463,6 @@ CSE (AI & ML) - LBRCE
             <!-- Header -->
             <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #c800ff; padding-bottom: 20px;">
                 <h1 style="color: #00e8ff; margin: 0; font-size: 28px;">🎉 TechXelarate 2026</h1>
-                <h2 style="color: #c800ff; margin: 8px 0 0 0; font-size: 20px;">Your ID Cards Are Ready!</h2>
             </div>
             
             <!-- Greeting -->
@@ -507,18 +506,6 @@ CSE (AI & ML) - LBRCE
                 </table>
             </div>
             
-            <!-- ID Card Section -->
-            <div style="background: rgba(0,255,136,0.1); border-left: 4px solid #00ff88; padding: 20px; 
-                        border-radius: 6px; margin: 25px 0;">
-                <h3 style="color: #00ff88; margin: 0 0 12px 0; font-size: 14px; text-transform: uppercase;">
-                    📋 Your ID Cards Are Ready
-                </h3>
-                <p style="color: #d0d0d0; margin: 0 0 10px 0; font-size: 14px; line-height: 1.6;">
-                    <strong>✓ Professional ID Badges:</strong> One card per team member with unique participant code<br/>
-                    <strong>✓ Scanning Ready:</strong> Each card has a QR code for instant check-in at the event<br/>
-                    <strong>✓ Premium Design:</strong> High-quality photo-badges with professional styling
-                </p>
-            </div>
             
             <!-- Motivation Quote -->
             <div style="background: linear-gradient(135deg, rgba(200,0,255,0.2) 0%, rgba(0,232,255,0.1) 100%); 
@@ -582,8 +569,10 @@ CSE (AI & ML) - LBRCE
                 return False
             
             # Send email
-            with smtplib.SMTP(settings.SMTP_HOST, int(settings.SMTP_PORT), timeout=10) as server:
+            with smtplib.SMTP(settings.SMTP_HOST, int(settings.SMTP_PORT)) as server:
+                server.ehlo()
                 server.starttls()
+                server.ehlo()
                 server.login(settings.SMTP_USER, settings.SMTP_PASS)
                 server.send_message(message)
             
