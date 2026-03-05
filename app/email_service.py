@@ -209,9 +209,9 @@ TechXelarate Team
             # no attachments
             
             # Send email
-            logger.info(f"🔌 Connecting to SMTP: {settings.SMTP_HOST}:{settings.SMTP_PORT}")
+            
             resend.Emails.send({
-    "from": "TechXelarate <lbrcehackcsm@gmail.com>",
+    "from": "TechXelarate <team@techxelerate.co.in>",
     "to": [to_email],
     "subject": message["Subject"],
     "html": html_body
@@ -317,9 +317,9 @@ TechXelarate Team
             message.add_alternative(html_body, subtype="html")
             
             # Send email
-            logger.info(f"🔌 Connecting to SMTP: {settings.SMTP_HOST}:{settings.SMTP_PORT}")
+            
             resend.Emails.send({
-    "from": "TechXelarate <lbrcehackcsm@gmail.com>",
+    "from": "TechXelarate <team@techxelerate.co.in>",
     "to": [to_email],
     "subject": message["Subject"],
     "html": html_body
@@ -542,7 +542,7 @@ CSE (AI & ML) - LBRCE
             
             # Send email
             resend.Emails.send({
-    "from": "TechXelarate <lbrcehackcsm@gmail.com>",
+    "from": "TechXelarate <team@techxelerate.co.in>",
     "to": [to_email],
     "subject": message["Subject"],
     "html": html_body
