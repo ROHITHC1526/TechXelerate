@@ -314,7 +314,7 @@
           >
             <div className="hero-event-item">
               <span className="text-3xl drop-shadow-lg">📅</span>
-              <span className="text-lg text-gray-200">Date: <span className="text-cyan-300 font-bold">13 March 2026</span></span>
+              <span className="text-lg text-gray-200">Date: <span className="text-cyan-300 font-bold">14 March 2026</span></span>
             </div>
           </motion.div>
           <motion.div
@@ -446,7 +446,7 @@
             {/* Hackathon title */}
             <motion.div variants={itemVariants}>
               <div className="mb-12 text-center">
-                <h1 className="hero-title text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black mb-4">
+                <h1 className="hero-title text-5xl sm:text-5xl md:text-6xl lg:text-7xl font-black mb-4">
                   TECHXELERATE<br />2026
                 </h1>
               </div>
@@ -671,7 +671,8 @@
               {name:'B. Rohith Mani',phone:'7036636671'},
               {name:'Shaik Sazid Vali',phone:'7396279327'},
               {name:'Sreeram',phone:'8977012479'},
-              {name:'Keerthan',phone:'8309209791'}
+              {name:'Keerthan',phone:'8309209791'},
+               {name:'Teja Sai',phone:'9290524027'}
             ].map((c,i)=>(
               <a key={i} href={`tel:+91${c.phone}`} className="coord-card flex flex-col items-center text-center">
                 <div className="h-20 w-20 rounded-full bg-gray-800 flex items-center justify-center text-3xl mb-4">👤</div>
@@ -819,7 +820,7 @@
                   f
                 </a>
                 <a href="https://lbrce.ac.in/quicklinks_pages/contact.php" target="_blank" rel="noopener noreferrer" className="social-link" title="LinkedIn">
-                  Phn
+                  📞
                 </a>
                 <a href="https://x.com/lbrce1" target="_blank" rel="noopener noreferrer" className="social-link" title="Twitter">
                   𝕏
