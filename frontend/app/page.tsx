@@ -446,7 +446,7 @@
             {/* Hackathon title */}
             <motion.div variants={itemVariants}>
               <div className="mb-12 text-center">
-                <h1 className="hero-title text-5xl sm:text-4xl md:text-5xl lg:text-6xl font-black mb-4">
+                <h1 className="hero-title text-[26px] sm:text-4xl md:text-5xl lg:text-6xl font-black mb-4 leading-tight tracking-wide">
                   TECHXELERATE<br />2026
                 </h1>
               </div>
