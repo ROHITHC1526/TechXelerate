@@ -446,7 +446,7 @@
             {/* Hackathon title */}
             <motion.div variants={itemVariants}>
               <div className="mb-12 text-center">
-                <h1 className="hero-title text-5xl sm:text-5xl md:text-6xl lg:text-7xl font-black mb-4">
+                <h1 className="hero-title text-5xl sm:text-4xl md:text-5xl lg:text-6xl font-black mb-4">
                   TECHXELERATE<br />2026
                 </h1>
               </div>
@@ -695,7 +695,7 @@
           <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-6">
             {[
               {name:'Dr I. Murali Krishna',role:'Professor'},
-              {name:'Mr Lalam Narendra',role:'Assistant Professor'}
+              {name:'Mr.Lalam Narendra',role:'Assistant Professor'}
             ].map((f,i)=>(
               <div key={i} className="coord-card flex flex-col items-center text-center">
                 <div className="h-20 w-20 rounded-full bg-gray-800 flex items-center justify-center text-3xl mb-4">👨‍🏫</div>
