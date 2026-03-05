@@ -17,13 +17,6 @@ logger = logging.getLogger(__name__)
 class EmailService:
     """Service for sending transactional emails."""
     
-    @staticmethod
-    def _get_smtp_config() -> tuple[bool, str]:
-        """Validate SMTP configuration."""
-        if not settings.SMTP_HOST or not settings.SMTP_USER or not settings.SMTP_PASS:
-            logger.error("❌ SMTP configuration incomplete")
-            return False, "SMTP configuration missing in .env file"
-        return True, ""
     
     @staticmethod
     def send_registration_confirmation(
@@ -52,11 +45,6 @@ class EmailService:
         Returns:
             True if email sent successfully, False otherwise
         """
-        is_valid, error = EmailService._get_smtp_config()
-        if not is_valid:
-            logger.error(error)
-            return False
-        
         try:
             logger.info(f"📧 Preparing registration confirmation email for {to_email}")
             message = EmailMessage()
@@ -223,7 +211,7 @@ TechXelarate Team
             # Send email
             logger.info(f"🔌 Connecting to SMTP: {settings.SMTP_HOST}:{settings.SMTP_PORT}")
             resend.Emails.send({
-    "from": "TechXelarate <onboarding@resend.dev>",
+    "from": "TechXelarate <lbrcehackcsm@gmail.com>",
     "to": [to_email],
     "subject": message["Subject"],
     "html": html_body
@@ -254,12 +242,7 @@ TechXelarate Team
             
         Returns:
             True if email sent successfully, False otherwise
-        """
-        is_valid, error = EmailService._get_smtp_config()
-        if not is_valid:
-            logger.error(error)
-            return False
-        
+        """     
         try:
             logger.info(f"📧 Preparing OTP email for {to_email}")
             message = EmailMessage()
@@ -336,7 +319,7 @@ TechXelarate Team
             # Send email
             logger.info(f"🔌 Connecting to SMTP: {settings.SMTP_HOST}:{settings.SMTP_PORT}")
             resend.Emails.send({
-    "from": "TechXelarate <onboarding@resend.dev>",
+    "from": "TechXelarate <lbrcehackcsm@gmail.com>",
     "to": [to_email],
     "subject": message["Subject"],
     "html": html_body
@@ -384,11 +367,6 @@ TechXelarate Team
         Returns:
             True if email sent successfully, False otherwise
         """
-        is_valid, error = EmailService._get_smtp_config()
-        if not is_valid:
-            logger.error(error)
-            return False
-        
         try:
             # Check PDF exists before creating message
             if not id_cards_pdf_path or not os.path.exists(id_cards_pdf_path):
@@ -564,7 +542,7 @@ CSE (AI & ML) - LBRCE
             
             # Send email
             resend.Emails.send({
-    "from": "TechXelarate <onboarding@resend.dev>",
+    "from": "TechXelarate <lbrcehackcsm@gmail.com>",
     "to": [to_email],
     "subject": message["Subject"],
     "html": html_body
