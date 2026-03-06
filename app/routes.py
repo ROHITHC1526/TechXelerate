@@ -26,6 +26,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
 
+# lightweight wake endpoint to warm throttled/idle hosts (e.g. Render)
+@router.get("/wake")
+async def wake():
+    """Simple route used by frontend to wake the server during cold start."""
+    # no database access or heavy logic here – just return quickly
+    return {"status": "awake"}
+
 # photo upload support removed – feature deprecated
 
 

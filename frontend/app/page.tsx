@@ -8,6 +8,7 @@
 
 
 
+
   // Neural Network Background Component
   const NeuralNetwork = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -403,7 +404,20 @@
   }
 
   export default function Home() {
-  
+
+    // wake server on initial load to avoid cold-start delays
+    useEffect(() => {
+      fetch("https://techxelerate2026.onrender.com/api/wake").catch(() => {})
+    }, [])
+
+    // helper to delay real API calls (gives server time to wake)
+    const delayedFetch = (url: string, options?: any, delay = 2000) => {
+      return new Promise<Response>((resolve, reject) => {
+        setTimeout(() => {
+          fetch(url, options).then(resolve, reject)
+        }, delay)
+      })
+    }
 
     return (
       <main className="relative bg-black text-white overflow-hidden">
