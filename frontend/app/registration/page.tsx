@@ -1,10 +1,9 @@
 "use client"
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-
 const schema = z.object({
   team_name: z.string().min(2, 'Team name required'),
   leader_name: z.string().min(2, 'Leader name required'),
@@ -60,6 +59,13 @@ export default function Registration() {
   const [registered, setRegistered] = useState<any>(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [otpAttempts, setOtpAttempts] = useState(0)
+  const [canResend, setCanResend] = useState(false)
+
+  // Wake backend on page load
+  useEffect(() => {
+    fetch("https://techxelerate2026.onrender.com/api/wake").catch(() => {})
+  }, [])
 
   const addMember = () => {
     if (members.length < 2) {
@@ -115,6 +121,8 @@ const payloadMembers = [
           terms_accepted: data.terms_accepted
         }
 
+      // optionally delay the request a bit so the pull-from-wake can finish
+      await new Promise(r => setTimeout(r, 2000))
       const res = await fetch('https://techxelerate2026.onrender.com/api/register', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
@@ -156,7 +164,9 @@ const payloadMembers = [
     setLoading(true)
     setError('')
 
-    try {
+    try {      // delay a bit in case server was just waking again
+      await new Promise(r => setTimeout(r, 1500))      // give wake request a moment before hitting real verify endpoint
+      await new Promise(r => setTimeout(r, 1500))
       const res = await fetch('https://techxelerate2026.onrender.com/api/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -199,7 +209,9 @@ const payloadMembers = [
                   <p className="text-xs text-gray-500 mb-1">TEAM ID</p>
                   <p className="text-3xl font-mono font-bold text-green-300">{registered.team_id}</p>
                 </div>
-                <p className="text-gray-400 text-sm">Check email for OTP confirmation and for Payment</p>
+               <p className="text-2xl font-black text-cyan-400 animate-pulse drop-shadow-[0_0_10px_#22d3ee]">
+  <strong>Check email for TEAM confirmation and for Payment</strong>
+</p>
               </div>
             </div>
           </div>
@@ -224,6 +236,7 @@ const payloadMembers = [
               ⚙ TEAM REGISTRATION
             </h1>
             <p className="text-gray-400 font-mono">Network your skills. Build something great.</p>
+            <p className="text-xs text-gray-400 italic">a 6 hr hackathon</p>
           </div>
 
         </div>
@@ -533,6 +546,16 @@ const payloadMembers = [
           )}
         </div>
       </div>
+
+      {/* Loading Overlay */}
+      {loading && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-cyan-400 mx-auto mb-4"></div>
+            <p className="text-white text-lg font-semibold">Processing registration... please wait</p>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
