@@ -315,7 +315,7 @@
           >
             <div className="hero-event-item">
               <span className="text-3xl drop-shadow-lg">📅</span>
-              <span className="text-lg text-gray-200">Date: <span className="text-cyan-300 font-bold">14 March 2026</span></span>
+              <span className="text-lg text-gray-200">Event Date: <span className="text-cyan-300 font-bold">14 March 2026</span></span>
             </div>
           </motion.div>
           <motion.div
@@ -324,8 +324,8 @@
             transition={{ duration: 0.6, delay: 0.8 }}
           >
             <div className="hero-event-item mt-4">
-              <span className="text-3xl drop-shadow-lg">⏰</span>
-              <span className="text-lg text-gray-200">Registration Ends: <span className="text-cyan-300 font-bold">11 March 2026</span></span>
+              <span className="text-3xl drop-shadow-lg"></span>
+              <span className="text-lg text-gray-200">📢 Flash Update: <span className="text-cyan-300 font-bold">Extended to 13 March 2026</span></span>
             </div>
           </motion.div>
           <motion.div
@@ -709,7 +709,7 @@
           </motion.div>
           <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-6">
             {[
-              {name:'Dr I. Murali Krishna',role:'Professor'},
+              {name:'Dr I. Murali Krishna',role:'Associate Professor'},
               {name:'Mr.Lalam Narendra',role:'Assistant Professor'}
             ].map((f,i)=>(
               <div key={i} className="coord-card flex flex-col items-center text-center">
