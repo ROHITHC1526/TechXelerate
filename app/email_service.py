@@ -83,7 +83,7 @@ Team Members:
 2. Share it with your team members
 
 💳 Please complete your registration payment by visiting:
-https://forms.gle/JTEqHwzVtraKxW9s5
+https://forms.gle/7oWQqMMu4xmvJB4T6
 
 
 🎉 We're excited to see your innovative ideas come to life!
@@ -208,7 +208,7 @@ TechXelarate Team
             
             # no attachments
             
-            # Send email
+            # Send emails
             
             resend.Emails.send({
     "from": "TechXelarate <team@techxelerate.co.in>",
